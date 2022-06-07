@@ -90,7 +90,7 @@ def create_edges(seq_length=1, num_nodes=29):
 
     if num_nodes == 778:
         
-        faces = np.load('./common/RightHandFaces.npy')
+        faces = np.load('/datasets/RightHandFaces.npy')
         edges = convert_faces_to_edges(faces)
         edges = torch.tensor(edges, dtype=torch.long)
         return edges
