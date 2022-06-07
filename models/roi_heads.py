@@ -848,13 +848,12 @@ class RoIHeads(nn.Module):
             keypoint_features = self.keypoint_head(keypoint_features)
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
-            # print(keypoint_logits.get_device())
             # Heatmap refinement using GraFormer
-            keypoint_logits = keypoint_logits.view(batch, kps, W*H)
-            if batch > 0:
+            if batch > 0 and self.keypoint_graformer is not None:
+                keypoint_logits = keypoint_logits.view(batch, kps, W*H)
                 keypoint_logits = self.keypoint_graformer(keypoint_logits)
-            # Reshape Heatmaps
-            keypoint_logits = keypoint_logits.view(batch, kps, W, H)
+                # Reshape Heatmaps
+                keypoint_logits = keypoint_logits.view(batch, kps, W, H)
             
             loss_keypoint = {}
             if self.training:
@@ -862,9 +861,7 @@ class RoIHeads(nn.Module):
                 assert pos_matched_idxs is not None
 
                 gt_keypoints = [t["keypoints"] for t in targets]
-                rcnn_loss_keypoint = keypointrcnn_loss(
-                    keypoint_logits, keypoint_proposals,
-                    gt_keypoints, pos_matched_idxs)
+                rcnn_loss_keypoint = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs)
                 loss_keypoint = {
                     "loss_keypoint": rcnn_loss_keypoint
                 }

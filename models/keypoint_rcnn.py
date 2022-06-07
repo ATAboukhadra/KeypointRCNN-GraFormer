@@ -172,7 +172,7 @@ class KeypointRCNN(FasterRCNN):
                  bbox_reg_weights=None,
                  # keypoint parameters
                  keypoint_roi_pool=None, keypoint_head=None, keypoint_predictor=None,
-                 keypoint_graformer=None, num_keypoints=17, device='cpu'):
+                 keypoint_graformer=None, num_keypoints=17, device='cpu', add_graformer=False):
 
         assert isinstance(keypoint_roi_pool, (MultiScaleRoIAlign, type(None)))
         if min_size is None:
@@ -198,7 +198,7 @@ class KeypointRCNN(FasterRCNN):
             keypoint_dim_reduced = 512  # == keypoint_layers[-1]
             keypoint_predictor = KeypointRCNNPredictor(keypoint_dim_reduced, num_keypoints)
 
-        if keypoint_graformer is None:
+        if keypoint_graformer is None and add_graformer:
             print("==> Creating model...")
             n_points = 21
             edges = create_edges(num_nodes=n_points)
@@ -228,8 +228,11 @@ class KeypointRCNN(FasterRCNN):
         self.roi_heads.keypoint_roi_pool = keypoint_roi_pool
         self.roi_heads.keypoint_head = keypoint_head
         self.roi_heads.keypoint_predictor = keypoint_predictor
-        self.roi_heads.keypoint_graformer = keypoint_graformer
 
+        if add_graformer:
+            self.roi_heads.keypoint_graformer = keypoint_graformer
+        else:
+            self.roi_heads.keypoint_graformer = None
 
 class KeypointRCNNHeads(nn.Sequential):
     def __init__(self, in_channels, layers):

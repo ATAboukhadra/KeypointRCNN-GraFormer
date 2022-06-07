@@ -160,7 +160,7 @@ def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object
 
     fig.tight_layout()
     # plt.subplots_adjust(wspace=0.2, hspace=0.3)
-    plt.show()
+    # plt.show()
 
 # Input parameters
 parser = argparse.ArgumentParser()
@@ -178,7 +178,8 @@ parser.add_argument("--hdf5_path", default='', help="Path to HDF5 files to load 
 parser.add_argument("--seq", default='MPM13', help="Sequence Name")
 parser.add_argument("--generate_mesh", action='store_true', help="Generate 3D mesh")
 parser.add_argument("--object", action='store_true', help="generate pose or shape for object?")
-
+parser.add_argument("--visualize", action='store_true', help="Visualize results?")
+parser.add_argument("--graformer", action='store_true', help="Add graformer to Mask RCNN")
 parser.add_argument("--ycb_path", default='./datasets/ycb_models/', help="Input YCB models, directory")
 
 args = parser.parse_args()
@@ -202,10 +203,11 @@ if args.gpu:
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=keypoints, num_classes=2, device=device)
+model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=keypoints, num_classes=2, device=device, add_graformer=args.graformer)
 
 if args.gpu and torch.cuda.is_available():
-    model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
+    if args.graformer:
+        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
     model = model.cuda(device=args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
@@ -229,6 +231,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
     data_dict = ts_data
 
     path = data_dict[0][0]['path']
+    # print(path)
     if args.seq not in path:
         continue
     # wrap them in Variable
@@ -251,44 +254,33 @@ for i, ts_data in tqdm(enumerate(testloader)):
     # if 'AP11' in path:
     img = img.transpose(1, 2, 0) * 255
     img = np.ascontiguousarray(img, np.uint8) 
-    print(predictions['labels'])
 
-    if 1 in predictions['labels']:
-    # if 1 in predictions['labels'] and 2 in predictions['labels']:
-        print(path)
-        hand_idx = list(predictions['labels']).index(1)
-        # visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}_GT/{name}', mesh=args.generate_mesh)
-        visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', mesh=args.generate_mesh, object=args.object)
+    ### Visualization
 
+    if args.visualize:
+        if 1 in predictions['labels'] or (1 in predictions['labels'] and 2 in predictions['labels'] and args.object):
+        #     # visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}_GT/{name}', mesh=args.generate_mesh)
+            visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', mesh=args.generate_mesh, object=args.object)
+        else:
+            print(predictions['labels'], name)
+            cv2.imwrite(f'./visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
-    #     # Crop hand and save
-    #     bb_hand = predictions['boxes'][hand_idx].astype(int)
-    #     cropped_img = img[bb_hand[1]:bb_hand[3], bb_hand[0]: bb_hand[2]]
-    #     # if 0 not in cropped_img.shape:
-    #     cv2.imwrite(f'./visual_results/{args.seq}_cropped/{name}', cv2.cvtColor(cropped_img, cv2.COLOR_RGB2BGR))
-    # else:
-    #     cv2.imwrite(f'./visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-
-
-#     predicted_labels = list(predictions['labels'])
+    ### Evaluation
+    predicted_labels = list(predictions['labels'])
     
-#     if 1 in predicted_labels:
-#         hand_idx = predicted_labels.index(1) 
-#         hand_keypoints = predictions['keypoints'][hand_idx]
+    if 1 in predicted_labels:
+        hand_idx = predicted_labels.index(1) 
+        hand_keypoints = predictions['keypoints'][hand_idx]
     
-#         if args.split != 'test':
-#             hand_keypoints_gt = labels['keypoints'][0]
-#             error = mpjpe(torch.Tensor(hand_keypoints[:, :2]), torch.Tensor(hand_keypoints_gt[:, :2]))
-#             errors.append(error)
+        if args.split != 'test':
+            hand_keypoints_gt = labels['keypoints'][0]
+            error = mpjpe(torch.Tensor(hand_keypoints[:, :2]), torch.Tensor(hand_keypoints_gt[:, :2]))
+            errors.append(error)
 
-#         # Replace visibility with confidence score
-#         confidence = predictions['keypoints_scores'][hand_idx]
-#         hand_keypoints[:, 2] = confidence
-        
-#     else:
-#         c_hand += 1
-#         hand_keypoints = np.zeros((21, 3))
-#         # print(c_hand)
+    else:
+        c_hand += 1
+        hand_keypoints = np.zeros((21, 3))
+        # print(c_hand)
       
 #     if 2 in predicted_labels:
 #         obj_idx = predicted_labels.index(2) 
@@ -299,18 +291,21 @@ for i, ts_data in tqdm(enumerate(testloader)):
 #         c_obj += 1
 #         obj_keypoints = np.zeros((8, 3))
 # #         print(c_hand, c_obj)
-    
-#     keypoints = np.append(hand_keypoints, obj_keypoints, axis=0)
+    if args.object:
+        keypoints = np.append(hand_keypoints, obj_keypoints, axis=0)
+    else:
+        keypoints = hand_keypoints
+    output_dict[path] = keypoints
 #     # print(keypoints)
-#     output_dict[path] = keypoints
     
 # #     # if 1 in predictions['labels'] and 2 in predictions['labels']:
 # #     #     visualize2d(img, predictions, labels)
 
-# avg_error = np.average(np.array(errors))
-# print('average error:', avg_error)
+if args.split != 'test':
+    avg_error = np.average(np.array(errors))
+    print('average error:', avg_error)
 
-# output_dict = dict(sorted(output_dict.items()))
+output_dict = dict(sorted(output_dict.items()))
 
-# with open(f'rcnn_outputs_{args.split}.pkl', 'wb') as f:
-#     pickle.dump(output_dict, f)
+with open(f'rcnn_outputs_hand_{args.split}.pkl', 'wb') as f:
+    pickle.dump(output_dict, f)

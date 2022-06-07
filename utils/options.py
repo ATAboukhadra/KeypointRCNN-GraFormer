@@ -114,5 +114,11 @@ def parse_args_function():
         action='store_true',
         help="Generate 3D pose or mesh for the object"
     )
+    parser.add_argument(
+        "--graformer",
+        action='store_true',
+        help="Add graformer to Mask RCNN"
+    )
+
     args = parser.parse_args()
     return args

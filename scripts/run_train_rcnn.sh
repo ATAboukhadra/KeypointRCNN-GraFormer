@@ -17,5 +17,6 @@ python3 train_rcnn.py \
   --snapshot_epoch 1 \
   --num_iterations 50 \
   --gpu \
+  --graformer \
   
 #   --generate_mesh \
