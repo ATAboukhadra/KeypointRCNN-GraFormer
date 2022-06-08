@@ -34,9 +34,16 @@ use_cuda = False
 if args.gpu:
     use_cuda = True
 
-keypoints = 21
+if args.object:
+    keypoints = 29
+else:
+    keypoints = 21
+    
 if args.generate_mesh:
-    keypoints = 778
+    if args.object:
+        keypoints = 1778
+    else:
+        keypoints = 778
 
 
 """ Configure a log """

@@ -117,6 +117,8 @@ def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object
 
     else:
         pred_image = showHandJoints(pred_image, hand_keypoints, filename=filename)
+        # pred_image = showHandJoints(pred_image, labels['keypoints'][0], filename=filename, mode='gt')
+
         ax.imshow(pred_image)
 
     # img = showHandJoints(img, predicted_keypoints2d[:21], dataset_name=dataset_name)
@@ -161,6 +163,7 @@ def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object
     fig.tight_layout()
     # plt.subplots_adjust(wspace=0.2, hspace=0.3)
     # plt.show()
+    plt.close(fig)
 
 # Input parameters
 parser = argparse.ArgumentParser()
