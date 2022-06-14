@@ -349,11 +349,14 @@ def show3DObjCorners(ax, verts, mode='pred', isOpenGLCoords=False):
 
     ax.scatter(x, y, z)
 
-def show2DMesh(fig, ax, img, mesh2DPoints, filename=None):
+def show2DMesh(fig, ax, img, mesh2DPoints, gt=False, filename=None):
     ax.imshow(img)
-    ax.scatter(mesh2DPoints[:778, 0], mesh2DPoints[:778, 1], alpha=0.3, s=40, marker='.')
-    if mesh2DPoints.shape[0] > 778:
-        ax.scatter(mesh2DPoints[778:, 0], mesh2DPoints[778:, 1], alpha=0.3, s=40, marker='.')
+    if gt:
+        ax.scatter(mesh2DPoints[:, 0], mesh2DPoints[:, 1], alpha=0.3, s=20, color="black", marker='.')
+    else:
+        ax.scatter(mesh2DPoints[:778, 0], mesh2DPoints[:778, 1], alpha=0.3, s=20, marker='.')
+        if mesh2DPoints.shape[0] > 778:
+            ax.scatter(mesh2DPoints[778:, 0], mesh2DPoints[778:, 1], alpha=0.3, s=20, color="red", marker='.')
     
     # Save just the portion _inside_ the second axis's boundaries
     if filename is not None:

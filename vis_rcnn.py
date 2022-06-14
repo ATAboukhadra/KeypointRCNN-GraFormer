@@ -82,13 +82,14 @@ def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object
             obj_keypoints = labels['keypoints'][1]
         
         ax = fig.add_subplot(height, width, 3)
+        mesh_ax = ax
         if mesh:
             if object:
                 keypoints = np.append(hand_keypoints[:778], obj_keypoints, axis=0)
             else:
                 keypoints = hand_keypoints[:778]
 
-            show2DMesh(fig, ax, gt_image, keypoints, filename=filename)
+            show2DMesh(fig, ax, gt_image, keypoints, gt=True, filename=filename)
         else:
             gt_image = showHandJoints(gt_image, hand_keypoints)
         # gt_image = showObjJoints(gt_image, obj_keypoints[:8])
@@ -113,7 +114,7 @@ def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object
             keypoints = np.append(hand_keypoints[:778], obj_keypoints, axis=0)
         else:
             keypoints = hand_keypoints[:778]        # show2DMesh(fig, ax, pred_image, keypoints, filename=filename)
-        show2DMesh(fig, ax, pred_image, keypoints)
+        show2DMesh(fig, mesh_ax, pred_image, keypoints, gt=False, filename=filename)
 
     else:
         pred_image = showHandJoints(pred_image, hand_keypoints, filename=filename)
@@ -195,9 +196,9 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, sh
 print(len(testloader.dataset))
 print('Data loaded!')
 
-keypoints = 21
+n_keypoints = 21
 if args.generate_mesh:
-    keypoints = 1000
+    n_keypoints = 778
 
 use_cuda = False
 if args.gpu:
@@ -206,7 +207,7 @@ if args.gpu:
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=keypoints, num_classes=2, device=device, add_graformer=args.graformer)
+model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=n_keypoints, num_classes=2, device=device, add_graformer=args.graformer)
 
 if args.gpu and torch.cuda.is_available():
     if args.graformer:
@@ -273,7 +274,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
     
     if 1 in predicted_labels:
         hand_idx = predicted_labels.index(1) 
-        hand_keypoints = predictions['keypoints'][hand_idx]
+        hand_keypoints = predictions['keypoints'][hand_idx][:, :2]
     
         if args.split != 'test':
             hand_keypoints_gt = labels['keypoints'][0]
@@ -282,7 +283,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
 
     else:
         c_hand += 1
-        hand_keypoints = np.zeros((21, 3))
+        hand_keypoints = np.zeros((21, 2))
         # print(c_hand)
       
 #     if 2 in predicted_labels:
@@ -309,6 +310,7 @@ if args.split != 'test':
     print('average error:', avg_error)
 
 output_dict = dict(sorted(output_dict.items()))
+print('Total number of predictions:', len(output_dict.keys()))
 
-with open(f'rcnn_outputs_hand_{args.split}.pkl', 'wb') as f:
+with open(f'./GraFormer/rcnn_outputs/rcnn_outputs_{n_keypoints}_{args.split}.pkl', 'wb') as f:
     pickle.dump(output_dict, f)

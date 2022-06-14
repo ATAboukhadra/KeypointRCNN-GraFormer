@@ -94,19 +94,20 @@ def create_edges(seq_length=1, num_nodes=29):
         edges = convert_faces_to_edges(faces)
         edges = torch.tensor(edges, dtype=torch.long)
         return edges
-
-    initial_edges = [
-                # Hand connectivity
-                [0, 1], [1, 2], [2, 3], [3, 4], 
-                [0, 5], [5, 6], [6, 7], [7, 8], 
-                [0, 9], [9, 10], [10, 11], [11, 12],
-                [0, 13], [13, 14], [14, 15], [15, 16], 
-                [0, 17], [17, 18], [18, 19], [19, 20], 
-                # # Object connectivity
-                # [21, 22],[22, 24], [24, 23], [23, 21],
-                # [25, 26], [26, 28], [28, 27], [27, 25],
-                # [21, 25], [22, 26], [23, 27], [24, 28]
-            ]
+    else:
+        initial_edges = [
+                    # Hand connectivity
+                    [0, 1], [1, 2], [2, 3], [3, 4], 
+                    [0, 5], [5, 6], [6, 7], [7, 8], 
+                    [0, 9], [9, 10], [10, 11], [11, 12],
+                    [0, 13], [13, 14], [14, 15], [15, 16], 
+                    [0, 17], [17, 18], [18, 19], [19, 20]]
+        if num_nodes == 29:
+                    # Object connectivity
+                    initial_edges.extend([
+                    [21, 22],[22, 24], [24, 23], [23, 21],
+                    [25, 26], [26, 28], [28, 27], [27, 25],
+                    [21, 25], [22, 26], [23, 27], [24, 28]])
     edges = []
     for i in range(0, seq_length):
 

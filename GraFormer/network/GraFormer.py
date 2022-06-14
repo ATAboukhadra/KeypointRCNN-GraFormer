@@ -187,7 +187,7 @@ class GraphNet(nn.Module):
         super(GraphNet, self).__init__()
 
         requires_grad=True
-        if n_pts > 100:
+        if n_pts > 200:
             requires_grad = False
         self.A_hat = Parameter(torch.eye(n_pts).float(), requires_grad=requires_grad)
         self.gconv1 = LAM_Gconv(in_features, in_features * 2)
@@ -206,7 +206,6 @@ class GraFormer(nn.Module):
         self.n_layers = num_layers
         self.adj = adj
         self.mask = torch.tensor([[[True] * n_pts]])
-
 
         _gconv_input = ChebConv(in_c=coords_dim[0], out_c=hid_dim, K=2)
         _gconv_layers = []

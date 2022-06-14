@@ -1,3 +1,4 @@
+from audioop import mul
 import torch
 import torch.nn as nn
 from torch.nn import init
@@ -80,8 +81,10 @@ class ChebConv(nn.Module):
         L = ChebConv.get_laplacian(graph, self.normalize)  # [N, N]
         mul_L = self.cheb_polynomial(L).unsqueeze(1)   # [K, 1, N, N]
 
+        # print(mul_L.shape, inputs.shape)
         result = torch.matmul(mul_L, inputs)  # [K, B, N, C]
 
+        # print(result.shape, self.weight.shape)
         result = torch.matmul(result, self.weight)  # [K, B, N, D]
         result = torch.sum(result, dim=0) + self.bias  # [B, N, D]
 
