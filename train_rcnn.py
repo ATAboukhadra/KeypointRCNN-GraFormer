@@ -137,6 +137,7 @@ if args.train:
 
             # print statistics
             loss = loss_dict['loss_keypoint']
+            # print(loss_dict['loss_keypoint3d'])
             running_loss += loss.data
             train_loss += loss.data
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches

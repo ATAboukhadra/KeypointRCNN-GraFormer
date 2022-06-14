@@ -314,13 +314,13 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     # TODO: understand how the tensors have different size but match in loss
     keypoint_loss = F.cross_entropy(keypoint_logits[valid], keypoint_targets[valid])
     
+    keypoint3d_loss = None
     if keypoint3d_pred is not None:
         keypoint3d_pred = keypoint3d_pred.view(N * K, 3)
         keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
         keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid])
-        return keypoint_loss, keypoint3d_loss
-    else: 
-        return keypoint_loss, None
+
+    return keypoint_loss, keypoint3d_loss
 
 
 def keypointrcnn_inference(x, boxes):
