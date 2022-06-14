@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('-c', '--checkpoint', default='checkpoint', type=str, metavar='PATH',
                         help='checkpoint directory')
     parser.add_argument('--snapshot', default=5, type=int, help='save models for every #snapshot epochs (default: 20)')
+    parser.add_argument('--gpu_number', default=1, type=int, help='The id of the GPU')
 
     parser.add_argument('--n_head', type=int, default=4, help='num head')
     parser.add_argument('--dim_model', type=int, default=96, help='dim model')
@@ -80,7 +81,7 @@ def main(args):
     dataset_path = path.join('')
 
     cudnn.benchmark = True
-    device = torch.device("cuda:1")
+    device = torch.device(f"cuda:{args.gpu_number}")
 
     # Create model
     print("==> Creating model...")
