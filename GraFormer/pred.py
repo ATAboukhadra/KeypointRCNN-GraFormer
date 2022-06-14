@@ -73,7 +73,7 @@ def main(base_path, pred_out_path, pred_func, version, model, set_name=None, mes
         file_list = f.readlines()
     file_list = [f.strip() for f in file_list]
 
-    predictions_dict = pickle.load(open('rcnn_outputs_hand.pkl', 'rb'))
+    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_21_test.pkl', 'rb'))
     
     # iterate over the dataset once
     xyz = []
@@ -89,16 +89,15 @@ def main(base_path, pred_out_path, pred_func, version, model, set_name=None, mes
         meta_path = os.path.join(base_path, set_name, seq_name, 'meta', file_id + '.pkl')
         
         aux_info = load_pickle_data(meta_path)
-        obj_point2d = load_obj_pose(aux_info, subset='test')
+        # obj_point2d = load_obj_pose(aux_info, subset='test')
     
         if mesh:
             inputs2d = np.zeros((778, 2))
             inputs2d = predictions_dict[rgb_path][:, 2]
         else:
-            inputs2d = np.zeros((29, 2))
-            
+            inputs2d = np.zeros((21, 2))
             inputs2d[:21] = predictions_dict[rgb_path][:21, :2]
-            inputs2d[21:] = obj_point2d
+            # inputs2d[21:] = obj_point2d
             inputs2d = torch.from_numpy(inputs2d)
         
         # use some algorithm for prediction
@@ -139,13 +138,13 @@ def pred_template(model, inputs_2d):
         aux_info: dictionary containing hand bounding box, camera matrix and root joint 3D location
     """
 
-    src_mask = torch.tensor([[[True] * 29]]).cuda()
+    # src_mask = torch.tensor([[[True] * 21]]).cuda()
 
     inputs_2d = Variable(inputs_2d.unsqueeze(axis=0)).float()
     if torch.cuda.is_available():
         inputs_2d = inputs_2d.cuda(device=1)
 
-    outputs3d = model(inputs_2d, src_mask) # ---------------
+    outputs3d = model(inputs_2d) # ---------------
     
     xyz = outputs3d.cpu().detach().numpy()[0][:21]
     verts = np.zeros((778, 3))
@@ -165,7 +164,7 @@ if __name__ == '__main__':
     parser.add_argument('--base_path', type=str, default='/home2/HO3D_v3', help='Path to where the HO3D dataset is located.')
     parser.add_argument('--out', type=str, default='pred.json', help='File to save the predictions.')
     parser.add_argument('--version', type=str, choices=['v2', 'v3'], help='version number')
-    parser.add_argument('--checkpoint_folder', default='GTNet_V3_cheb_2l-gt/_head-4-layers-5-dim-96/_lr_step50000-lr_gamma0.9-drop_0.25', help='the folder of the pretrained model')
+    parser.add_argument('--checkpoint_folder', default='GTNet_V3_cheb_2l-21-gt/_head-4-layers-5-dim-96/_lr_step50000-lr_gamma0.9-drop_0.25', help='the folder of the pretrained model')
     parser.add_argument('--n_head', type=int, default=4, help='num head')
     parser.add_argument('--dim_model', type=int, default=96, help='dim model')
     parser.add_argument('--n_layer', type=int, default=5, help='num layer')
@@ -174,11 +173,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # create edges
-    edges = create_edges()
-    adj = adj_mx_from_edges(num_pts=29, edges=edges, sparse=False)
+    edges = create_edges(num_nodes=21)
+    adj = adj_mx_from_edges(num_pts=21, edges=edges, sparse=False)
     
     # define model
-    model = GraFormer(adj=adj.cuda(1), hid_dim=args.dim_model, coords_dim=(2, 3), n_pts=29, num_layers=args.n_layer, n_head=args.n_head, dropout=args.dropout).cuda()
+    model = GraFormer(adj=adj.cuda(1), hid_dim=args.dim_model, coords_dim=(2, 3), n_pts=21, num_layers=args.n_layer, n_head=args.n_head, dropout=args.dropout).cuda()
 
     # Load pretrained model
     pretrained_model = f'./checkpoint/{args.checkpoint_folder}/ckpt_best.pth.tar'
@@ -188,6 +187,7 @@ if __name__ == '__main__':
         
     if torch.cuda.is_available():
         model = model.cuda(1)
+        model.mask = model.mask.cuda(1)
         model = nn.DataParallel(model, device_ids=[1])
     
     # Switch to evaluate mode
