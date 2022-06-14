@@ -104,7 +104,7 @@ optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_step_gamma)
 scheduler.last_epoch = start
 
-keys = ['boxes', 'labels', 'keypoints']
+keys = ['boxes', 'labels', 'keypoints', 'keypoints3d']
 
 """ training """
 

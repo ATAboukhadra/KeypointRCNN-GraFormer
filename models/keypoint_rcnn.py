@@ -202,7 +202,7 @@ class KeypointRCNN(FasterRCNN):
             print("==> Creating model...")
             edges = create_edges(num_nodes=num_keypoints)
             adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(3136, 3136), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(3136, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,

@@ -66,9 +66,9 @@ class Dataset(data.Dataset):
                     # Load complete hand-object mesh
                     mesh2d = self.mesh2d[index]
             if self.return_mesh:
-                boxes, labels, keypoints = create_rcnn_data(bb_hand, bb_object, mesh2d, pose=False, obj=self.object)
+                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb_hand, bb_object, mesh2d, pose=False, obj=self.object)
             else:
-                boxes, labels, keypoints = create_rcnn_data(bb_hand, bb_object, point2d, pose=True, obj=self.object)
+                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb_hand, bb_object, point2d, point3d, pose=True, obj=self.object)
 
         else:
             bb_hand, bb_object, mesh2d = np.array([]), np.array([]), np.array([])
@@ -86,6 +86,7 @@ class Dataset(data.Dataset):
             'boxes': boxes,
             'labels': labels,
             'keypoints': keypoints,
+            'keypoints3d': keypoints3d 
         }
 
         return data

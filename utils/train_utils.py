@@ -14,7 +14,7 @@ def calculate_bounding_box(point2d, increase=False):
         return np.array([x_min, y_min, x_max, y_max])
 
 
-def create_rcnn_data(bb_hand, bb_object, point2d, pose=True, obj=True):
+def create_rcnn_data(bb_hand, bb_object, point2d, point3d, pose=True, obj=True):
     ''' Prepares data for an RCNN by creating tensors for Bounding boxes, labels and keypoints with their visibility'''
 
     # Boxes and Labels
@@ -31,7 +31,8 @@ def create_rcnn_data(bb_hand, bb_object, point2d, pose=True, obj=True):
 
     if pose: # In case of Pose where hand has 21 vertices and object has 8
         hand_keypoints = keypoints[:21]
-        
+        hand_keypoints3d = point3d[:21]
+
         if obj:
             obj_keypoints = keypoints[21:]
             # Append dummy points to the objects keypoints to match the number of hands keypoints
@@ -41,6 +42,7 @@ def create_rcnn_data(bb_hand, bb_object, point2d, pose=True, obj=True):
 
     else: # In case of Shape where hand has 778 vertices and object has >= 1000
         hand_keypoints = keypoints[:778]
+        hand_keypoints3d = point3d[:778]
 
         if obj:
             obj_keypoints = keypoints[778:]
@@ -54,5 +56,7 @@ def create_rcnn_data(bb_hand, bb_object, point2d, pose=True, obj=True):
         final_keypoints = torch.Tensor(np.stack((hand_keypoints, obj_keypoints))).float()
     else:
         final_keypoints = torch.Tensor(hand_keypoints[np.newaxis, ...]).float()
+        final_keypoints3d = torch.Tensor(hand_keypoints3d[np.newaxis, ...]).float()
 
-    return boxes, labels, final_keypoints
+
+    return boxes, labels, final_keypoints, final_keypoints3d
