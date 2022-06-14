@@ -318,7 +318,8 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     if keypoint3d_pred is not None:
         keypoint3d_pred = keypoint3d_pred.view(N * K, 3)
         keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
-        keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid])
+        keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid]) / 1000
+        # print(keypoint3d_loss)
 
     return keypoint_loss, keypoint3d_loss
 
