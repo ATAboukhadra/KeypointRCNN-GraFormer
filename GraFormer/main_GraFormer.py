@@ -227,7 +227,7 @@ def train(data_loader, model_pos, criterion, optimizer, device, lr_init, lr_now,
     return epoch_loss_3d_pos.avg, lr_now, step
 
 
-def evaluate(data_loader, model_pos, device):
+def evaluate(data_loader, model_pos, device, seq_length=1):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     epoch_loss_3d_pos = AverageMeter()
@@ -250,7 +250,11 @@ def evaluate(data_loader, model_pos, device):
         # inputs_2d_rcnn = inputs_2d_rcnn.float().to(device)
 
         # [:, -29:] i.e. Use last pose if more than 1 pose, otherwise use the only pose
-        outputs_3d = model_pos(inputs_2d)
+        offset=0
+        if seq_length > 1:
+            offset = seq_length - 1
+        outputs_3d = model_pos(inputs_2d)[:, 21*offset:21*(offset+1)]
+        targets_3d = targets_3d[:, 21*offset:21*(offset+1)]
         # outputs_3d[:, :, :] -= outputs_3d[:, :1, :]  # Zero-centre the root (hip)
         # print(targets_3d[:, -29:].shape)
         epoch_loss_3d_pos.update(mpjpe(outputs_3d, targets_3d.float().to(device)).item(), num_poses)

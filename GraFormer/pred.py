@@ -8,6 +8,7 @@ import os
 import numpy as np
 import json
 import pickle
+import re
 from tqdm import tqdm
 from torch.autograd import Variable
 from common.data_utils import create_edges
@@ -58,7 +59,33 @@ def load_pickle_data(f_name):
 
     return pickle_data
 
-def main(base_path, pred_out_path, pred_func, version, model, set_name=None, mesh=False):
+def create_sequence(rcnn_dict, path, seq_length=1, n_points=21):
+        frame_num = int(path.split('/')[-1].split('.')[0])
+        point2d_seq = np.zeros((seq_length, n_points, 2))
+        
+        missing_frames = False
+        
+        for i in range(0, seq_length):
+            if frame_num - i < 0:
+                missing_frames = True
+                break
+            new_frame_num = '%04d' % (frame_num-i)
+            new_path = re.sub('\d{4}', new_frame_num, path)    
+            if new_path in rcnn_dict.keys():
+                point2d_seq[-i-1] = rcnn_dict[new_path][:n_points, :2] 
+                last_pose = -i-1
+            else: # Replicate the last pose in case of missing information
+                point2d_seq[-i-1] = point2d_seq[last_pose]
+
+        if missing_frames:
+            n_missing_frames = seq_length - i
+            point2d_seq[0:-i] = np.tile(point2d_seq[-i], (n_missing_frames, 1, 1)) 
+        
+        point2d_seq = point2d_seq.reshape((seq_length * n_points, 2))
+
+        return point2d_seq
+
+def main(base_path, pred_out_path, pred_func, version, model, set_name=None, mesh=False, seq_length=1):
     """
         Main eval loop: Iterates over all evaluation samples and saves the corresponding predictions.
     """
@@ -92,11 +119,14 @@ def main(base_path, pred_out_path, pred_func, version, model, set_name=None, mes
         # obj_point2d = load_obj_pose(aux_info, subset='test')
     
         if mesh:
-            inputs2d = np.zeros((778, 2))
+            # inputs2d = np.zeros((778, 2))
             inputs2d = predictions_dict[rgb_path][:, 2]
         else:
-            inputs2d = np.zeros((21, 2))
-            inputs2d[:21] = predictions_dict[rgb_path][:21, :2]
+            # inputs2d = np.zeros((21, 2))
+            if seq_length == 1:
+                inputs2d = predictions_dict[rgb_path][:21, :2]
+            else:
+                inputs2d = create_sequence(predictions_dict, rgb_path, seq_length=seq_length)
             # inputs2d[21:] = obj_point2d
             inputs2d = torch.from_numpy(inputs2d)
         
@@ -145,8 +175,7 @@ def pred_template(model, inputs_2d):
         inputs_2d = inputs_2d.cuda(device=1)
 
     outputs3d = model(inputs_2d) # ---------------
-    
-    xyz = outputs3d.cpu().detach().numpy()[0][:21]
+    xyz = outputs3d.cpu().detach().numpy()[0][-21:]
     verts = np.zeros((778, 3))
 
     # OpenGL coordinates and reordering
@@ -164,20 +193,21 @@ if __name__ == '__main__':
     parser.add_argument('--base_path', type=str, default='/home2/HO3D_v3', help='Path to where the HO3D dataset is located.')
     parser.add_argument('--out', type=str, default='pred.json', help='File to save the predictions.')
     parser.add_argument('--version', type=str, choices=['v2', 'v3'], help='version number')
-    parser.add_argument('--checkpoint_folder', default='GTNet_V3_cheb_2l-21-gt/_head-4-layers-5-dim-96/_lr_step50000-lr_gamma0.9-drop_0.25', help='the folder of the pretrained model')
+    parser.add_argument('--checkpoint_folder', default='GTNet_V3_cheb_2l-21-gt-9/_head-4-layers-5-dim-96/_lr_step50000-lr_gamma0.9-drop_0.25', help='the folder of the pretrained model')
     parser.add_argument('--n_head', type=int, default=4, help='num head')
     parser.add_argument('--dim_model', type=int, default=96, help='dim model')
     parser.add_argument('--n_layer', type=int, default=5, help='num layer')
+    parser.add_argument('--seq_length', type=int, default=1, help='Sequence length')
     parser.add_argument('--dropout', default=0.25, type=float, help='dropout rate')
 
     args = parser.parse_args()
     
     # create edges
-    edges = create_edges(num_nodes=21)
-    adj = adj_mx_from_edges(num_pts=21, edges=edges, sparse=False)
+    edges = create_edges(num_nodes=21, seq_length=args.seq_length)
+    adj = adj_mx_from_edges(num_pts=21 * args.seq_length, edges=edges, sparse=False)
     
     # define model
-    model = GraFormer(adj=adj.cuda(1), hid_dim=args.dim_model, coords_dim=(2, 3), n_pts=21, num_layers=args.n_layer, n_head=args.n_head, dropout=args.dropout).cuda()
+    model = GraFormer(adj=adj.cuda(1), hid_dim=args.dim_model, coords_dim=(2, 3), n_pts=21 * args.seq_length, num_layers=args.n_layer, n_head=args.n_head, dropout=args.dropout).cuda()
 
     # Load pretrained model
     pretrained_model = f'./checkpoint/{args.checkpoint_folder}/ckpt_best.pth.tar'
@@ -202,5 +232,6 @@ if __name__ == '__main__':
         set_name='evaluation',
         version=args.version,
         model=model,
+        seq_length=args.seq_length
     )
 
