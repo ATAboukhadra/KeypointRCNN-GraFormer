@@ -280,7 +280,7 @@ def heatmaps_to_keypoints(maps, rois):
 
 
 def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched_idxs, keypoint3d_pred=None, keypoint3d_gt=None):
-    # type: (Tensor, List[Tensor], List[Tensor], List[Tensor]) -> Tensor
+    # type: (Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor]) -> Tensor
     N, K, H, W = keypoint_logits.shape
     assert H == W
     discretization_size = H
@@ -858,6 +858,7 @@ class RoIHeads(nn.Module):
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
             # Heatmap refinement using GraFormer
+            keypoint3d = torch.zeros((21, 3))
             if batch > 0 and self.keypoint_graformer is not None:
                 # keypoint_logits = keypoint_logits.view(batch, kps, W*H)
                 keypoint3d = self.keypoint_graformer(keypoint_logits.view(batch, kps, W*H))

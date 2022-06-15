@@ -110,7 +110,7 @@ def showHandJoints(imgInOrg, gtIn, filename=None, dataset_name='ho', mode='pred'
                              thickness=-1)
     else:
         if dataset_name=='ho':
-            max_length=150
+            max_length=300
         else:
             max_length=350
         for joint_num in range(gtIn.shape[0]):

@@ -44,7 +44,7 @@ class Dataset(data.Dataset):
         image_path = self.images[index]
 
         point2d = self.points2d[index]
-        point3d = self.points3d[index]
+        point3d = self.points3d[index] - self.points3d[index][0] # Center around palm
 
         # Loading Hand Mesh for hand bounding box
         mesh2d = self.mesh2d[index][:778]
@@ -72,7 +72,7 @@ class Dataset(data.Dataset):
 
         else:
             bb_hand, bb_object, mesh2d = np.array([]), np.array([]), np.array([])
-            boxes, labels, keypoints = torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
+            boxes, labels, keypoints, keypoints3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
 
         data = {
             'path': image_path,
