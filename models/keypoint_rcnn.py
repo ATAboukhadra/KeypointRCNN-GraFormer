@@ -6,7 +6,7 @@ from torchvision.ops import MultiScaleRoIAlign
 from torchvision.models.detection._utils import overwrite_eps
 from torchvision._internally_replaced_utils import load_state_dict_from_url
 
-from .faster_rcnn import FasterRCNN
+from .faster_rcnn import FasterRCNN, TwoMLPHead
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone, _validate_trainable_layers
 from GraFormer.network.GraFormer import GraFormer, adj_mx_from_edges
 from GraFormer.common.data_utils import create_edges
@@ -172,7 +172,7 @@ class KeypointRCNN(FasterRCNN):
                  bbox_reg_weights=None,
                  # keypoint parameters
                  keypoint_roi_pool=None, keypoint_head=None, keypoint_predictor=None,
-                 keypoint_graformer=None, num_keypoints=17, device='cpu', add_graformer=False):
+                 num_keypoints=17, device='cpu', add_graformer=False, add_feature_extractor=False):
 
         assert isinstance(keypoint_roi_pool, (MultiScaleRoIAlign, type(None)))
         if min_size is None:
@@ -198,11 +198,18 @@ class KeypointRCNN(FasterRCNN):
             keypoint_dim_reduced = 512  # == keypoint_layers[-1]
             keypoint_predictor = KeypointRCNNPredictor(keypoint_dim_reduced, num_keypoints)
 
-        if keypoint_graformer is None and add_graformer:
+        if add_graformer:
             print("==> Creating model...")
+
+            if add_feature_extractor:
+                # Feature Extractor
+                pooling = nn.AdaptiveAvgPool2d((10, 14))
+                feature_extractor = TwoMLPHead(256 * 10 * 14, 1024)
+            
+            # GraFormer
             edges = create_edges(num_nodes=num_keypoints)
             adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(3136, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(4160, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
@@ -228,6 +235,13 @@ class KeypointRCNN(FasterRCNN):
         self.roi_heads.keypoint_head = keypoint_head
         self.roi_heads.keypoint_predictor = keypoint_predictor
 
+        if add_feature_extractor:
+            self.roi_heads.pooling = pooling
+            self.roi_heads.feature_extractor = feature_extractor
+        else:
+            self.roi_heads.pooling = None
+            self.roi_heads.feature_extractor = None
+            
         if add_graformer:
             self.roi_heads.keypoint_graformer = keypoint_graformer
         else:
