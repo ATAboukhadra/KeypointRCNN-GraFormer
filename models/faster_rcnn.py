@@ -7,7 +7,7 @@ from torchvision.models.detection._utils import overwrite_eps
 from torchvision._internally_replaced_utils import load_state_dict_from_url
 
 from torchvision.models.detection.anchor_utils import AnchorGenerator
-from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
+from .generalized_rcnn import GeneralizedRCNN
 from torchvision.models.detection.rpn import RPNHead, RegionProposalNetwork
 from .roi_heads import RoIHeads
 from torchvision.models.detection.transform import GeneralizedRCNNTransform

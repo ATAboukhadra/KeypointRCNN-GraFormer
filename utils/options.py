@@ -120,5 +120,11 @@ def parse_args_function():
         help="Add graformer to Mask RCNN"
     )
 
+    parser.add_argument(
+        "--feature_extractor",
+        action='store_true',
+        help="Add feature extractor in Mask RCNN"
+    )
+
     args = parser.parse_args()
     return args

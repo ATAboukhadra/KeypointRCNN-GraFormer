@@ -765,10 +765,13 @@ class RoIHeads(nn.Module):
             regression_targets = None
             matched_idxs = None
 
+        # print(features['pool'].shape)
+        # print(self.box_roi_pool)
         box_features = self.box_roi_pool(features, proposals, image_shapes)
         box_features = self.box_head(box_features)
+        
         class_logits, box_regression = self.box_predictor(box_features)
-
+        # print(box_regression.shape)
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
         if self.training:
@@ -860,11 +863,17 @@ class RoIHeads(nn.Module):
             # Heatmap refinement using GraFormer
             keypoint3d = torch.zeros((21, 3))
             if batch > 0 and self.keypoint_graformer is not None:
-                # keypoint_logits = keypoint_logits.view(batch, kps, W*H)
-                keypoint3d = self.keypoint_graformer(keypoint_logits.view(batch, kps, W*H))
+                
                 # Reshape Heatmaps
-                # keypoint_logits = keypoint_logits.view(batch, kps, W, H)
-            
+                graformer_inputs = keypoint_logits.view(batch, kps, W*H)
+                if self.pooling is not None:
+                    img_features = self.pooling(features['pool'])
+                    img_features = self.feature_extractor(img_features)
+                    img_features = img_features.repeat(batch, kps, 1)
+                    graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
+                
+                keypoint3d = self.keypoint_graformer(graformer_inputs)
+                
             loss_keypoint = {}
             if self.training:
                 assert targets is not None
