@@ -201,15 +201,17 @@ class KeypointRCNN(FasterRCNN):
         if add_graformer:
             print("==> Creating model...")
 
+            input_size = 3136
             if add_feature_extractor:
                 # Feature Extractor
                 pooling = nn.AdaptiveAvgPool2d((10, 14))
                 feature_extractor = TwoMLPHead(256 * 10 * 14, 1024)
+                input_size += 1024
             
             # GraFormer
             edges = create_edges(num_nodes=num_keypoints)
             adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(4160, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
