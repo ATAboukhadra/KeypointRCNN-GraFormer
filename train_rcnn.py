@@ -35,15 +35,15 @@ if args.gpu:
     use_cuda = True
 
 if args.object:
-    keypoints = 29
+    num_keypoints = 29
 else:
-    keypoints = 21
+    num_keypoints = 21
     
 if args.generate_mesh:
     if args.object:
-        keypoints = 1778
+        num_keypoints = 1778
     else:
-        keypoints = 778
+        num_keypoints = 778
 
 
 """ Configure a log """
@@ -62,20 +62,20 @@ transform = transforms.Compose([transforms.ToTensor()])
 """ load datasets """
 
 if args.train:
-    trainset = Dataset(root=root, load_set='train', transform=transform, return_mesh=args.generate_mesh, object=args.object)
+    trainset = Dataset(root=root, load_set='train', transform=transform, num_keypoints=num_keypoints)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=32, collate_fn=collate_fn)    
     logging.info('Train files loaded')
     logging.info(f'size of training set: {len(trainset)}')
 
 if args.val:
-    valset = Dataset(root=root, load_set='val', transform=transform, return_mesh=args.generate_mesh, object=args.object)
+    valset = Dataset(root=root, load_set='val', transform=transform,num_keypoints=num_keypoints)
     valloader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
     logging.info('Validation files loaded')
     logging.info(f'size of validation set: {len(valset)}')
 
 """ load model """
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=keypoints, num_classes=2, device=device, 
+model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device, 
                                 add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
 print('Keypoint RCNN is loaded')
 logging.info(model)

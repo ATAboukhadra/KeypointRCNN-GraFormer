@@ -15,11 +15,12 @@ from utils.train_utils import calculate_bounding_box, create_rcnn_data
 class Dataset(data.Dataset):
     """# Dataset Class """
 
-    def __init__(self, root='./', load_set='train', transform=None, return_mesh=False, object=False,  hdf5_file=None):
+    def __init__(self, root='./', load_set='train', transform=None, num_keypoints=21,  hdf5_file=None):
 
         self.root = root
         self.transform = transform
-        self.return_mesh = return_mesh
+        # self.return_mesh = return_mesh
+        self.num_keypoints = num_keypoints
         self.object = object
         self.hdf5 = hdf5_file
 
@@ -30,8 +31,8 @@ class Dataset(data.Dataset):
         self.points3d = np.load(os.path.join(root, 'points3d-%s.npy' % self.load_set))
 
         self.mesh2d = np.load(os.path.join(root, 'mesh2d-%s.npy' % self.load_set))
-        if self.return_mesh:
-            self.mesh = np.load(os.path.join(root, 'mesh3d-%s.npy' % self.load_set))
+        if self.num_keypoints > 29:
+            self.mesh3d = np.load(os.path.join(root, 'mesh3d-%s.npy' % self.load_set))
 
     def __getitem__(self, index):
         """
@@ -46,9 +47,11 @@ class Dataset(data.Dataset):
         point2d = self.points2d[index]
         point3d = self.points3d[index] - self.points3d[index][0] # Center around palm
 
-        # Loading Hand Mesh for hand bounding box
-        mesh2d = self.mesh2d[index][:778]
-                
+        # Loading 2D Mesh for bounding box calculation
+        if self.num_keypoints == 21 or self.num_keypoints == 778: #i.e. hand
+            mesh2d = self.mesh2d[index][:778]
+        else: # i.e. object
+            mesh2d = self.mesh2d[index]
         # Load image and apply preprocessing if any
         if self.hdf5 is not None:
             data = np.array(self.hdf5[image_path])
@@ -59,19 +62,15 @@ class Dataset(data.Dataset):
         inputs = self.transform(original_image)  # [:3]
 
         if self.load_set != 'test':
-            bb_hand = calculate_bounding_box(mesh2d, increase=True)
-            bb_object = calculate_bounding_box(point2d[21:])
-            if self.return_mesh:
-                if self.object:
-                    # Load complete hand-object mesh
-                    mesh2d = self.mesh2d[index]
-            if self.return_mesh:
-                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb_hand, bb_object, mesh2d, pose=False, obj=self.object)
+            bb = calculate_bounding_box(mesh2d, increase=True)
+            if self.num_keypoints > 29:
+                mesh3d = self.mesh3d[index][:self.num_keypoints]
+                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, mesh2d, mesh3d, num_keypoints=self.num_keypoints)
             else:
-                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb_hand, bb_object, point2d, point3d, pose=True, obj=self.object)
+                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=self.num_keypoints)
 
         else:
-            bb_hand, bb_object, mesh2d = np.array([]), np.array([]), np.array([])
+            bb, mesh2d = np.array([]), np.array([])
             boxes, labels, keypoints, keypoints3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
 
         data = {
@@ -81,8 +80,7 @@ class Dataset(data.Dataset):
             'point2d': point2d,
             'point3d': point3d,
             'mesh2d': mesh2d,
-            'bb_hand': bb_hand,
-            'bb_object': bb_object,
+            'bb': bb,
             'boxes': boxes,
             'labels': labels,
             'keypoints': keypoints,

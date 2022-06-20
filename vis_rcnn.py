@@ -36,7 +36,7 @@ def draw_confidence(image, keypoints, scores):
     
     return image
 
-def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object=False):
+def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
     
     # print(n)
     # img = img.astype(np.uint8)
@@ -45,104 +45,73 @@ def visualize2d(img, predictions, labels=None, filename=None, mesh=False, object
     width = 3
     height = 2
     i = 1
-    hand_idx = list(predictions['labels']).index(1) #[0]
-    if object:
-        obj_idx = list(predictions['labels']).index(2) #[0]
-
-    predicted_keypoints3d = predictions['keypoints3d'][hand_idx]
-    # projected_keypoints2d = project_3D_points(cam_mat, predicted_keypoints3d, is_OpenGL_coords=False)
+    idx = list(predictions['labels']).index(1) #[0]
     
-    # boxes = predictions['boxes']
-    # if bb_hand is not None:
-    #     bb_image = draw_bb(original_img, bb_hand, [229, 255, 204])
-    #     bb_image = draw_bb(bb_image, bb_object, [204, 229, 255])
-    # else:
-    #     bb_image = original_img
+    predicted_keypoints3d = predictions['keypoints3d'][idx]
+    # projected_keypoints2d = project_3D_points(cam_mat, predicted_keypoints3d, is_OpenGL_coords=False)
+
+    # Plot GT bounding boxes
     bb_image = np.copy(img)
     if labels is not None:
         ax = fig.add_subplot(height, width, 1)
         ax.title.set_text('GT BB')
-
-        bb_hand = labels['boxes'][0]
-        # bb_object = labels['boxes'][1]
-        # print(bb_hand)
-        bb_image = draw_bb(bb_image, bb_hand, [229, 255, 204])
-        # bb_image = draw_bb(bb_image, bb_object, [204, 229, 255])
+        bb = labels['boxes'][0]
+        bb_image = draw_bb(bb_image, bb, [229, 255, 204])
         ax.imshow(bb_image)
 
+    # Plot predicted bounding boxes
     ax = fig.add_subplot(height, width, 4)
     ax.title.set_text('Predicted BB')
 
     bb_image = np.copy(img)
     # draw_confidence(bb_image, predictions['keypoints'][hand_idx], predictions['keypoints_scores'][hand_idx])
     for bb in predictions['boxes']:
-        # bb_hand = predictions['boxes'][0]
-        # bb_object = predictions['boxes'][1]
-    #     # print(bb_hand)
         bb_image = draw_bb(bb_image, bb, [229, 255, 204])
-        # bb_image = draw_bb(bb_image, bb_object, [204, 229, 255])
     ax.imshow(bb_image)
 
-    # Plot 2D annotations
+    # Plot GT 2D keypoints
     gt_image = np.copy(img)
     if labels is not None:
-        hand_keypoints = labels['keypoints'][0]
-        if object:
-            obj_keypoints = labels['keypoints'][1]
-        
+        keypoints = labels['keypoints'][0][:num_keypoints]
         ax = fig.add_subplot(height, width, 2)
         mesh_ax = ax
-        if mesh:
-            if object:
-                keypoints = np.append(hand_keypoints[:778], obj_keypoints, axis=0)
-            else:
-                keypoints = hand_keypoints[:778]
-
+        if num_keypoints > 29: # i.e. mesh
             show2DMesh(fig, ax, gt_image, keypoints, gt=True, filename=filename)
-        else:
-            gt_image = showHandJoints(gt_image, hand_keypoints)
-        # gt_image = showObjJoints(gt_image, obj_keypoints[:8])
+        else: # i.e. pose
+            gt_image = showHandJoints(gt_image, keypoints[:21])
+            if num_keypoints > 21:
+                gt_image = showObjJoints(gt_image, keypoints[21:])
             ax.imshow(gt_image)
         ax.title.set_text('GT keypoints')
-        
+
+        # Plot GT 3D Keypoints
         keypoints3d = labels['keypoints3d'][0]
         ax = fig.add_subplot(height, width, 3, projection="3d")
         show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
-        
+        if num_keypoints > 21:
+            show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
+
+    
+    # Plot predicted 2D keypoints
     pred_image = np.copy(img)
-    # print(type(predictions['labels']))
-    # object_idx = list(predictions['labels']).index(2)#[0]
-    # print(hand_idx, object_idx)
-    
-    hand_keypoints2d = predictions['keypoints'][hand_idx]
-    if object:
-        obj_keypoints = predictions['keypoints'][obj_idx]
-    # object_box = predictions['boxes'][object_idx]
-    
-    # print(hand_keypoints.shape)
+    keypoints2d = predictions['keypoints'][idx]
+
     ax = fig.add_subplot(height, width, 5)
-    if mesh:
-        if object:
-            keypoints2d = np.append(hand_keypoints[:778], obj_keypoints, axis=0)
-        else:
-            keypoints2d = hand_keypoints[:778]        # show2DMesh(fig, ax, pred_image, keypoints, filename=filename)
-        show2DMesh(fig, mesh_ax, pred_image, keypoints, gt=False, filename=filename)
-
-    else:
-        pred_image = showHandJoints(pred_image, hand_keypoints2d, filename=filename)
-        # pred_image = showHandJoints(pred_image, labels['keypoints'][0], filename=filename, mode='gt')
-
+    if num_keypoints > 29: # i.e. mesh
+        show2DMesh(fig, mesh_ax, pred_image, keypoints2d, gt=False, filename=filename)
+    else: # i.e. pose
+        pred_image = showHandJoints(pred_image, keypoints2d[:21], filename=filename)
+        if num_keypoints > 21:
+            pred_image = showObjJoints(pred_image, keypoints[21:], filename=filename)
         ax.imshow(pred_image)
-
-    # img = showHandJoints(img, predicted_keypoints2d[:21], dataset_name=dataset_name)
-    # pred_image = showObjJoints(pred_image, obj_keypoints[:8])
-    # pred_image = draw_bb(pred_image, object_box, [229, 255, 204])
     ax.title.set_text('Predicted keypoints')
 
-
+    # Plot predicted 3D keypoints
     ax = fig.add_subplot(height, width, 6, projection="3d")
     show3DHandJoints(ax, predicted_keypoints3d[:21], isOpenGLCoords=True)
-        
+    if num_keypoints > 21:
+        show3DObjCorners(ax, predicted_keypoints3d[21:], isOpenGLCoords=True)
+
     # img = showObjJoints(img, predicted_keypoints2d[21:], filename=file_path)
     # ax = fig.add_subplot(height, width, i + width)
     # ax.imshow(img)
@@ -205,14 +174,21 @@ args = parser.parse_args()
 # Transformer function
 transform_function = transforms.Compose([transforms.ToTensor()])
 
-testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, return_mesh=args.generate_mesh, object=args.object)
+if args.object:
+    num_keypoints = 29
+else:
+    num_keypoints = 21
+    
+if args.generate_mesh:
+    if args.object:
+        num_keypoints = 1778
+    else:
+        num_keypoints = 778
+
+testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, num_keypoints=num_keypoints)
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=16, collate_fn=collate_fn)
 print(len(testloader.dataset))
 print('Data loaded!')
-
-n_keypoints = 21
-if args.generate_mesh:
-    n_keypoints = 778
 
 use_cuda = False
 if args.gpu:
@@ -221,24 +197,24 @@ if args.gpu:
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=n_keypoints, num_classes=2, device=device, add_graformer=args.graformer)
+# model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device, add_graformer=args.graformer)
 
-if args.gpu and torch.cuda.is_available():
-    if args.graformer:
-        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-    model = model.cuda(device=args.gpu_number[0])
-    model = nn.DataParallel(model, device_ids=args.gpu_number)
+# if args.gpu and torch.cuda.is_available():
+#     if args.graformer:
+#         model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
+#     model = model.cuda(device=args.gpu_number[0])
+#     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
-pretrained_model = f'./checkpoints/{args.checkpoint_folder}/model-{args.checkpoint_id}.pkl'
-model.load_state_dict(torch.load(pretrained_model, map_location='cuda:1'))
-model = model.eval()
-print(model)
-print('model loaded!')
+# pretrained_model = f'./checkpoints/{args.checkpoint_folder}/model-{args.checkpoint_id}.pkl'
+# model.load_state_dict(torch.load(pretrained_model, map_location='cuda:1'))
+# model = model.eval()
+# print(model)
+# print('model loaded!')
 
 minLoss = 100000
 criterion = nn.MSELoss()
 keys = ['boxes', 'labels', 'keypoints', 'keypoints3d']
-c_hand, c_obj = 0, 0
+c = 0
 output_dict = {}
 errors = []
 
@@ -257,11 +233,13 @@ for i, ts_data in tqdm(enumerate(testloader)):
     inputs = [t[0]['inputs'].to(device) for t in data_dict]
     # original_input = data_dict['original_image'].cpu().detach().numpy()[0]
     
-    outputs = model(inputs)
+    # outputs = model(inputs)
 
     img = inputs[0].cpu().detach().numpy()
     labels = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
-    predictions = {k: v.cpu().detach().numpy() for k, v in outputs[0].items()}
+    # predictions = {k: v.cpu().detach().numpy() for k, v in outputs[0].items()}
+
+    predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
 
     path = data_dict[0][0]['path']
     name = path.split('/')[-1]
@@ -278,7 +256,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
     if args.visualize:
         if 1 in predictions['labels'] or (1 in predictions['labels'] and 2 in predictions['labels'] and args.object):
         #     # visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}_GT/{name}', mesh=args.generate_mesh)
-            visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', mesh=args.generate_mesh, object=args.object)
+            visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', num_keypoints=num_keypoints)
         else:
             print(predictions['labels'], name)
             cv2.imwrite(f'./visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
@@ -287,47 +265,31 @@ for i, ts_data in tqdm(enumerate(testloader)):
     predicted_labels = list(predictions['labels'])
     
     if 1 in predicted_labels:
-        hand_idx = predicted_labels.index(1) 
+        idx = predicted_labels.index(1) 
         if args.dimension == 3:
-            hand_keypoints = predictions['keypoints3d'][hand_idx][:, :args.dimension]
+            keypoints = predictions['keypoints3d'][idx][:, :args.dimension]
         else:
-            hand_keypoints = predictions['keypoints'][hand_idx][:, :args.dimension]
+            keypoints = predictions['keypoints'][idx][:, :args.dimension]
     
         if args.split != 'test':
-            hand_keypoints_gt = labels['keypoints'][0][:, :args.dimension]
-            error = mpjpe(torch.Tensor(hand_keypoints), torch.Tensor(hand_keypoints_gt))
+            keypoints_gt = labels['keypoints'][0][:, :args.dimension]
+            error = mpjpe(torch.Tensor(keypoints[:21]), torch.Tensor(keypoints_gt[:21]))
             errors.append(error)
 
     else:
-        c_hand += 1
-        hand_keypoints = np.zeros((21, args.dimension))
-        print(c_hand)
+        c += 1
+        keypoints = np.zeros((num_keypoints, args.dimension))
+        print(c)
       
-#     if 2 in predicted_labels:
-#         obj_idx = predicted_labels.index(2) 
-#         obj_keypoints = predictions['keypoints'][obj_idx][:8]
-#         confidence = predictions['keypoints_scores'][obj_idx][:8]
-#         obj_keypoints[:, 2] = confidence
-#     else:
-#         c_obj += 1
-#         obj_keypoints = np.zeros((8, 3))
-# #         print(c_hand, c_obj)
-    if args.object:
-        keypoints = np.append(hand_keypoints, obj_keypoints, axis=0)
-    else:
-        keypoints = hand_keypoints
     output_dict[path] = keypoints
-#     # print(keypoints)
-    
-# #     # if 1 in predictions['labels'] and 2 in predictions['labels']:
-# #     #     visualize2d(img, predictions, labels)
+    # break
 
 if args.split != 'test':
     avg_error = np.average(np.array(errors))
-    print('average error:', avg_error)
+    print('hand pose average error on validation set:', avg_error)
 
 output_dict = dict(sorted(output_dict.items()))
 print('Total number of predictions:', len(output_dict.keys()))
 
-with open(f'./GraFormer/rcnn_outputs/rcnn_outputs_{n_keypoints}_{args.split}_3d.pkl', 'wb') as f:
+with open(f'./rcnn_outputs/rcnn_outputs_{num_keypoints}_{args.split}_3d.pkl', 'wb') as f:
     pickle.dump(output_dict, f)
