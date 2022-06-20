@@ -287,19 +287,27 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     heatmaps = []
     valid = []
     kps3d = []
-
-    for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, midx in zip(proposals, gt_keypoints, keypoint3d_gt, keypoint_matched_idxs):
-        kp = gt_kp_in_image[midx]
-        kp3d = gt_kp3d_in_image[midx]
-
-        heatmaps_per_image, valid_per_image = keypoints_to_heatmap(kp, proposals_per_image, discretization_size)
-        
-        heatmaps.append(heatmaps_per_image.view(-1))
-        valid.append(valid_per_image.view(-1))
-        kps3d.append(kp3d.view(-1))
     
+    if keypoint3d_pred is not None:
+        for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, midx in zip(proposals, gt_keypoints, keypoint3d_gt, keypoint_matched_idxs):
+            kp = gt_kp_in_image[midx]
+            kp3d = gt_kp3d_in_image[midx]
+
+            heatmaps_per_image, valid_per_image = keypoints_to_heatmap(kp, proposals_per_image, discretization_size)
+            
+            heatmaps.append(heatmaps_per_image.view(-1))
+            valid.append(valid_per_image.view(-1))
+            kps3d.append(kp3d.view(-1))
+    else:
+        for proposals_per_image, gt_kp_in_image, midx in zip(proposals, gt_keypoints, keypoint_matched_idxs):
+            kp = gt_kp_in_image[midx]
+
+            heatmaps_per_image, valid_per_image = keypoints_to_heatmap(kp, proposals_per_image, discretization_size)
+            
+            heatmaps.append(heatmaps_per_image.view(-1))
+            valid.append(valid_per_image.view(-1))
+        
     keypoint_targets = torch.cat(heatmaps, dim=0)
-    keypoint_targets3d = torch.cat(kps3d, dim=0)
     valid = torch.cat(valid, dim=0).to(dtype=torch.uint8)    
     valid = torch.where(valid)[0]
     
@@ -309,19 +317,17 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         return keypoint_logits.sum() * 0
 
     keypoint_logits = keypoint_logits.view(N * K, H * W)
-    # print(keypoint_targets[valid].shape, keypoint_logits[valid].shape)
-
     # TODO: understand how the tensors have different size but match in loss
     keypoint_loss = F.cross_entropy(keypoint_logits[valid], keypoint_targets[valid])
     
-    keypoint3d_loss = None
     if keypoint3d_pred is not None:
+        keypoint_targets3d = torch.cat(kps3d, dim=0)
         keypoint3d_pred = keypoint3d_pred.view(N * K, 3)
         keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
         keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid]) / 1000
-        # print(keypoint3d_loss)
-
-    return keypoint_loss, keypoint3d_loss
+        return keypoint_loss, keypoint3d_loss
+    else:
+        return keypoint_loss
 
 
 def keypointrcnn_inference(x, boxes):
@@ -765,13 +771,10 @@ class RoIHeads(nn.Module):
             regression_targets = None
             matched_idxs = None
 
-        # print(features['pool'].shape)
-        # print(self.box_roi_pool)
         box_features = self.box_roi_pool(features, proposals, image_shapes)
         box_features = self.box_head(box_features)
         
         class_logits, box_regression = self.box_predictor(box_features)
-        # print(box_regression.shape)
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
         if self.training:
@@ -856,23 +859,26 @@ class RoIHeads(nn.Module):
             else:
                 pos_matched_idxs = None
 
+            
             keypoint_features = self.keypoint_roi_pool(features, keypoint_proposals, image_shapes)
             keypoint_features = self.keypoint_head(keypoint_features)
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
+            
             # Heatmap refinement using GraFormer
-            keypoint3d = torch.zeros((21, 3))
-            if batch > 0 and self.keypoint_graformer is not None:
-                
-                # Reshape Heatmaps
-                graformer_inputs = keypoint_logits.view(batch, kps, W*H)
-                if self.pooling is not None:
-                    img_features = self.pooling(features['pool'])
-                    img_features = self.feature_extractor(img_features)
-                    img_features = img_features.repeat(batch, kps, 1)
-                    graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
-                
-                keypoint3d = self.keypoint_graformer(graformer_inputs)
+            if self.keypoint_graformer is not None:
+                keypoint3d = torch.zeros((21, 3))
+                if batch > 0:
+                    # Reshape Heatmaps
+                    graformer_inputs = keypoint_logits.view(batch, kps, W*H)
+                    if self.pooling is not None:
+                        img_features = self.pooling(features['pool'])
+                        img_features = self.feature_extractor(img_features)
+                        img_features = img_features.repeat(batch, kps, 1)
+                        graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
+                    
+                    keypoint3d = self.keypoint_graformer(graformer_inputs)
+                    keypoints3d_gt = [t["keypoints3d"] for t in targets]
                 
             loss_keypoint = {}
             if self.training:
@@ -880,13 +886,19 @@ class RoIHeads(nn.Module):
                 assert pos_matched_idxs is not None
 
                 gt_keypoints = [t["keypoints"] for t in targets]
-                keypoints3d_gt = [t["keypoints3d"] for t in targets]
-                rcnn_loss_keypoint, rcnn_loss_keypoint3d = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, keypoint3d, keypoints3d_gt)
                 
-                loss_keypoint = {
-                    "loss_keypoint": rcnn_loss_keypoint,
-                    "loss_keypoint3d": rcnn_loss_keypoint3d
-                }
+                if self.keypoint_graformer is not None:
+                    rcnn_loss_keypoint, rcnn_loss_keypoint3d = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, 
+                                                                                keypoint3d, keypoints3d_gt)
+                    loss_keypoint = {
+                        "loss_keypoint": rcnn_loss_keypoint,
+                        "loss_keypoint3d": rcnn_loss_keypoint3d
+                    }
+                else:
+                    rcnn_loss_keypoint = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, None, None)
+                    loss_keypoint = {
+                        "loss_keypoint": rcnn_loss_keypoint,
+                    }
 
             else:
                 assert keypoint_logits is not None
@@ -895,9 +907,9 @@ class RoIHeads(nn.Module):
                 keypoints_probs, kp_scores = keypointrcnn_inference(keypoint_logits, keypoint_proposals)
                 for keypoint_prob, kps, r in zip(keypoints_probs, kp_scores, result):
                     r["keypoints"] = keypoint_prob
-                    r["keypoints3d"] = keypoint3d
                     r["keypoints_scores"] = kps
-
+                    if self.keypoint_graformer is not None:
+                        r["keypoints3d"] = keypoint3d
 
             losses.update(loss_keypoint)
 
