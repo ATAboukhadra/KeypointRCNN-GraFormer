@@ -219,8 +219,9 @@ if args.gpu:
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device, 
-                                    add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
+model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
 
 if args.gpu and torch.cuda.is_available():
     if args.graformer:

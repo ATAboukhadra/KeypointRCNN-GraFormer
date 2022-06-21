@@ -876,7 +876,10 @@ class RoIHeads(nn.Module):
                     if self.pooling is not None:
                         img_features = self.pooling(features['pool'])
                         img_features = self.feature_extractor(img_features)
-                        img_features = img_features.repeat(batch, kps, 1)
+                        # print(img_features.unsqueeze(axis=1).repeat(1, kps, 1).shape)
+                        img_features = img_features.unsqueeze(axis=1).repeat(1, kps, 1)
+                        print(img_features.shape, graformer_inputs.shape)
+                        
                         graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
                     
                     keypoint3d = self.keypoint_graformer(graformer_inputs)

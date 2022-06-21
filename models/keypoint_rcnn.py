@@ -211,14 +211,9 @@ class KeypointRCNN(FasterRCNN):
             # GraFormer
             edges = create_edges(num_nodes=num_keypoints)
             adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            if num_keypoints > 29:
-                hid_dim = 64
-                num_layers = 2
-                n_head = 4
-            else:
-                hid_dim = 96
-                num_layers = 5
-                n_head = 4
+            hid_dim = 96
+            num_layers = 5
+            n_head = 4
             keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=hid_dim, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=num_layers, n_head=n_head, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
