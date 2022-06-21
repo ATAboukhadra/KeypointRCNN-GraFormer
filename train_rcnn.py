@@ -75,8 +75,9 @@ if args.val:
 
 """ load model """
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device, 
-                                add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
+model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, 
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1,
+                                device=device, add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
 print('Keypoint RCNN is loaded')
 logging.info(model)
 

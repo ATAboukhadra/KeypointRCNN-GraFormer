@@ -12,12 +12,18 @@ from utils.vis_utils import *
 from tqdm import tqdm
 from GraFormer.common.loss import mpjpe
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
+from manopth.manolayer import ManoLayer
+
 
 cam_mat = np.array(
     [[617.343,0,      312.42],
     [0,       617.343,241.42],
     [0,       0,       1]
  ])
+
+mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, ncomps=6, flat_hand_mean=True)
+handFaces = mano_layer.th_faces
+print("Mano layer faces loaded!")
 
 def collate_fn(batch):
     return tuple(zip(batch))
@@ -87,9 +93,18 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
         # Plot GT 3D Keypoints
         keypoints3d = labels['keypoints3d'][0]
         ax = fig.add_subplot(height, width, 3, projection="3d")
-        show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
-        if num_keypoints > 21:
-            show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
+        
+        if num_keypoints > 29:
+            plot3dVisualize(ax, keypoints3d[:num_keypoints], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
+            # if generate_obj_mesh:
+            #     plot3dVisualize(ax, mesh[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
+            cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
+            ax.title.set_text('Original Hand Mesh')
+
+        else:
+            show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
+            if num_keypoints > 21:
+                show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
 
     
     # Plot predicted 2D keypoints
@@ -98,20 +113,27 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
 
     ax = fig.add_subplot(height, width, 5)
     if num_keypoints > 29: # i.e. mesh
-        show2DMesh(fig, mesh_ax, pred_image, keypoints2d, gt=False, filename=filename)
+        show2DMesh(fig, ax, pred_image, keypoints2d, gt=False, filename=filename)
     else: # i.e. pose
         pred_image = showHandJoints(pred_image, keypoints2d[:21], filename=filename)
         if num_keypoints > 21:
-            pred_image = showObjJoints(pred_image, keypoints[21:], filename=filename)
+            pred_image = showObjJoints(pred_image, keypoints2d[21:], filename=filename)
         ax.imshow(pred_image)
     ax.title.set_text('Predicted keypoints')
 
     # Plot predicted 3D keypoints
     ax = fig.add_subplot(height, width, 6, projection="3d")
-    show3DHandJoints(ax, predicted_keypoints3d[:21], isOpenGLCoords=True)
-    if num_keypoints > 21:
-        show3DObjCorners(ax, predicted_keypoints3d[21:], isOpenGLCoords=True)
-
+    if num_keypoints > 29:
+        plot3dVisualize(ax, predicted_keypoints3d[:num_keypoints], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
+        # if generate_obj_mesh:
+        #     plot3dVisualize(ax, mesh[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
+        cam_equal_aspect_3d(ax, predicted_keypoints3d[:num_keypoints], flip_x=False)
+        ax.title.set_text('Original Hand Mesh')
+    else:
+        show3DHandJoints(ax, predicted_keypoints3d[:21], isOpenGLCoords=True)
+        if num_keypoints > 21:
+            show3DObjCorners(ax, predicted_keypoints3d[21:], isOpenGLCoords=True)
+    
     # img = showObjJoints(img, predicted_keypoints2d[21:], filename=file_path)
     # ax = fig.add_subplot(height, width, i + width)
     # ax.imshow(img)
@@ -168,7 +190,7 @@ parser.add_argument("--object", action='store_true', help="generate pose or shap
 parser.add_argument("--visualize", action='store_true', help="Visualize results?")
 parser.add_argument("--graformer", action='store_true', help="Add graformer to Mask RCNN")
 parser.add_argument("--ycb_path", default='./datasets/ycb_models/', help="Input YCB models, directory")
-
+parser.add_argument("--feature_extractor", action='store_true', help="Add feature extractor in Mask RCNN")
 args = parser.parse_args()
 
 # Transformer function
@@ -197,19 +219,20 @@ if args.gpu:
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
-# model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device, add_graformer=args.graformer)
+model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device, 
+                                    add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
 
-# if args.gpu and torch.cuda.is_available():
-#     if args.graformer:
-#         model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-#     model = model.cuda(device=args.gpu_number[0])
-#     model = nn.DataParallel(model, device_ids=args.gpu_number)
+if args.gpu and torch.cuda.is_available():
+    if args.graformer:
+        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
+    model = model.cuda(device=args.gpu_number[0])
+    model = nn.DataParallel(model, device_ids=args.gpu_number)
 
-# pretrained_model = f'./checkpoints/{args.checkpoint_folder}/model-{args.checkpoint_id}.pkl'
-# model.load_state_dict(torch.load(pretrained_model, map_location='cuda:1'))
-# model = model.eval()
-# print(model)
-# print('model loaded!')
+pretrained_model = f'./checkpoints/{args.checkpoint_folder}/model-{args.checkpoint_id}.pkl'
+model.load_state_dict(torch.load(pretrained_model, map_location='cuda:1'))
+model = model.eval()
+print(model)
+print('model loaded!')
 
 minLoss = 100000
 criterion = nn.MSELoss()
@@ -233,13 +256,13 @@ for i, ts_data in tqdm(enumerate(testloader)):
     inputs = [t[0]['inputs'].to(device) for t in data_dict]
     # original_input = data_dict['original_image'].cpu().detach().numpy()[0]
     
-    # outputs = model(inputs)
+    outputs = model(inputs)
 
     img = inputs[0].cpu().detach().numpy()
     labels = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
-    # predictions = {k: v.cpu().detach().numpy() for k, v in outputs[0].items()}
+    predictions = {k: v.cpu().detach().numpy() for k, v in outputs[0].items()}
 
-    predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
+    # predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
 
     path = data_dict[0][0]['path']
     name = path.split('/')[-1]

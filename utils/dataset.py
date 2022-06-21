@@ -19,9 +19,7 @@ class Dataset(data.Dataset):
 
         self.root = root
         self.transform = transform
-        # self.return_mesh = return_mesh
         self.num_keypoints = num_keypoints
-        self.object = object
         self.hdf5 = hdf5_file
 
         # TODO: add depth transformation

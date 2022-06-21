@@ -16,8 +16,8 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
     # init output containers
     xyz_pred_list, verts_pred_list = list(), list()
 
-    predictions_dict = pickle.load(open('./rcnn_outputs_21_test_3d.pkl', 'rb'))
-
+    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_21_test_3d.pkl', 'rb'))
+    # print(predictions_dict)
     # read list of evaluation files
     with open(os.path.join(base_path, set_name+'.txt')) as f:
         file_list = f.readlines()
@@ -34,8 +34,12 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
         file_id = file_list[idx].split('/')[1]
 
         # load input image
-        img = read_RGB_img(base_path, seq_name, file_id, set_name)
-        rgb_path = os.path.join(base_path, set_name, seq_name, 'rgb', file_id + '.jpg')
+        # img = read_RGB_img(base_path, seq_name, file_id, set_name)
+        img = np.array([])
+        if version == 'v3':
+            rgb_path = os.path.join(base_path, set_name, seq_name, 'rgb', file_id + '.jpg')
+        else:
+            rgb_path = os.path.join(base_path, set_name, seq_name, 'rgb', file_id + '.png')
         aux_info = read_annotation(base_path, seq_name, file_id, set_name)
 
         # use some algorithm for prediction
@@ -77,7 +81,9 @@ def pred_template(img, aux_info, predictions, path):
     order_idx = np.argsort(np.array([0, 13, 14, 15, 16, 1, 2, 3, 17, 4, 5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20]))
     coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
     
-    xyz = predictions[path].dot(coord_change_mat.T)[order_idx] / 1000 # 3D coordinates of the 21 joints
+    # print(path, aux_info['handJoints3D'], predictions[path].dot(coord_change_mat.T)[order_idx] / 1000)
+    
+    xyz = predictions[path].dot(coord_change_mat.T)[order_idx] / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 21 joints
     verts = np.zeros((778, 3)) # 3D coordinates of the shape vertices
     return xyz, verts
 

@@ -860,11 +860,13 @@ class RoIHeads(nn.Module):
                 pos_matched_idxs = None
 
             
+            # print(len(keypoint_proposals))
+            
             keypoint_features = self.keypoint_roi_pool(features, keypoint_proposals, image_shapes)
             keypoint_features = self.keypoint_head(keypoint_features)
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
-            
+            # print(batch)
             # Heatmap refinement using GraFormer
             if self.keypoint_graformer is not None:
                 keypoint3d = torch.zeros((21, 3))
@@ -878,7 +880,6 @@ class RoIHeads(nn.Module):
                         graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
                     
                     keypoint3d = self.keypoint_graformer(graformer_inputs)
-                    keypoints3d_gt = [t["keypoints3d"] for t in targets]
                 
             loss_keypoint = {}
             if self.training:
@@ -888,6 +889,7 @@ class RoIHeads(nn.Module):
                 gt_keypoints = [t["keypoints"] for t in targets]
                 
                 if self.keypoint_graformer is not None:
+                    keypoints3d_gt = [t["keypoints3d"] for t in targets]
                     rcnn_loss_keypoint, rcnn_loss_keypoint3d = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, 
                                                                                 keypoint3d, keypoints3d_gt)
                     loss_keypoint = {
