@@ -25,6 +25,11 @@ mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, n
 handFaces = mano_layer.th_faces
 print("Mano layer faces loaded!")
 
+# Loading object faces
+obj_mesh = read_obj('../HOPE/datasets/spheres/sphere_1000.obj')
+objFaces = obj_mesh.f
+
+
 def collate_fn(batch):
     return tuple(zip(batch))
 
@@ -96,8 +101,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
         
         if num_keypoints > 29:
             plot3dVisualize(ax, keypoints3d[:num_keypoints], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
-            # if generate_obj_mesh:
-            #     plot3dVisualize(ax, mesh[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
+            if num_keypoints > 778:
+                plot3dVisualize(ax, keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
             cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
             ax.title.set_text('Original Hand Mesh')
 
@@ -125,8 +130,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
     ax = fig.add_subplot(height, width, 6, projection="3d")
     if num_keypoints > 29:
         plot3dVisualize(ax, predicted_keypoints3d[:num_keypoints], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
-        # if generate_obj_mesh:
-        #     plot3dVisualize(ax, mesh[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
+        if num_keypoints > 778:
+            plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
         cam_equal_aspect_3d(ax, predicted_keypoints3d[:num_keypoints], flip_x=False)
         ax.title.set_text('Original Hand Mesh')
     else:

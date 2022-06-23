@@ -3,9 +3,6 @@ from torch import nn
 
 from torchvision.ops import MultiScaleRoIAlign
 
-from torchvision.models.detection._utils import overwrite_eps
-from torchvision._internally_replaced_utils import load_state_dict_from_url
-
 from .faster_rcnn import FasterRCNN, TwoMLPHead
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone, _validate_trainable_layers
 from GraFormer.network.GraFormer import GraFormer, adj_mx_from_edges
@@ -202,19 +199,18 @@ class KeypointRCNN(FasterRCNN):
             print("==> Creating model...")
 
             input_size = 3136
+            # GraFormer
+            edges = create_edges(num_nodes=num_keypoints)
+            adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
+            keypoint_graformer2d = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, input_size), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+            
             if add_feature_extractor:
                 # Feature Extractor
                 pooling = nn.AdaptiveAvgPool2d((10, 14))
                 feature_extractor = TwoMLPHead(256 * 10 * 14, 1024)
                 input_size += 1024
             
-            # GraFormer
-            edges = create_edges(num_nodes=num_keypoints)
-            adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            hid_dim = 96
-            num_layers = 5
-            n_head = 4
-            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=hid_dim, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=num_layers, n_head=n_head, dropout=0.25)
+            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
@@ -249,8 +245,12 @@ class KeypointRCNN(FasterRCNN):
             
         if add_graformer:
             self.roi_heads.keypoint_graformer = keypoint_graformer
+            self.roi_heads.keypoint_graformer2d = keypoint_graformer2d
+
         else:
             self.roi_heads.keypoint_graformer = None
+            self.roi_heads.keypoint_graformer2d = None
+
 
 class KeypointRCNNHeads(nn.Sequential):
     def __init__(self, in_channels, layers):

@@ -12,6 +12,11 @@ from torchvision.models.detection import _utils as det_utils
 
 from typing import Optional, List, Dict, Tuple
 
+# from pytorch3d import (
+#     mesh_edge_loss, 
+#     mesh_laplacian_smoothing, 
+#     mesh_normal_consistency,
+# )
 
 def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
     # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
@@ -289,7 +294,11 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     kps3d = []
     
     if keypoint3d_pred is not None:
+
         for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, midx in zip(proposals, gt_keypoints, keypoint3d_gt, keypoint_matched_idxs):
+            # if proposals_per_image.shape[0] > 1:
+            #     print(keypoint_matched_idxs)
+            # print(proposals_per_image.shape[0])
             kp = gt_kp_in_image[midx]
             kp3d = gt_kp3d_in_image[midx]
 
@@ -324,7 +333,20 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         keypoint_targets3d = torch.cat(kps3d, dim=0)
         keypoint3d_pred = keypoint3d_pred.view(N * K, 3)
         keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
+        # print(keypoint_targets3d[valid].shape, keypoint3d_pred.shape)
         keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid]) / 1000
+        
+        # trg_mesh = Meshes(verts=[keypoint3d_pred[valid]], faces=[faces_idx])
+        # and (b) the edge length of the predicted mesh
+        # loss_edge = mesh_edge_loss(keypoint3d_pred[valid])
+        # mesh normal consistency
+        # loss_normal = mesh_normal_consistency(keypoint3d_pred[valid])
+        # mesh laplacian smoothing
+        # loss_laplacian = mesh_laplacian_smoothing(keypoint3d_pred[valid], method="uniform")
+        # Weighted sum of the losses
+        # keypoint3d_loss += loss_edge + loss_laplacian * 0.1  #+ loss_normal * 0.01
+        
+        # Print the losses
         return keypoint_loss, keypoint3d_loss
     else:
         return keypoint_loss
@@ -873,6 +895,8 @@ class RoIHeads(nn.Module):
                 if batch > 0:
                     # Reshape Heatmaps
                     graformer_inputs = keypoint_logits.view(batch, kps, W*H)
+                    keypoint_logits = self.keypoint_graformer2d(graformer_inputs).view(batch, kps, W, H)
+                    
                     if self.pooling is not None:
                         img_features = self.pooling(features['pool'])
                         img_features = self.feature_extractor(img_features)
