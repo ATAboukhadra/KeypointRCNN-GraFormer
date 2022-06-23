@@ -231,6 +231,8 @@ model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints,
 if args.gpu and torch.cuda.is_available():
     if args.graformer:
         model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
+        model.roi_heads.keypoint_graformer2d.mask = model.roi_heads.keypoint_graformer2d.mask.cuda(args.gpu_number[0])
+
     model = model.cuda(device=args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 

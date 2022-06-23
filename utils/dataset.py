@@ -41,9 +41,10 @@ class Dataset(data.Dataset):
         """
 
         image_path = self.images[index]
-
+        
+        palm = self.points3d[index][0]
         point2d = self.points2d[index]
-        point3d = self.points3d[index] - self.points3d[index][0] # Center around palm
+        point3d = self.points3d[index] - palm # Center around palm
 
         # Loading 2D Mesh for bounding box calculation
         if self.num_keypoints == 21 or self.num_keypoints == 778: #i.e. hand
@@ -62,7 +63,7 @@ class Dataset(data.Dataset):
         if self.load_set != 'test':
             bb = calculate_bounding_box(mesh2d, increase=True)
             if self.num_keypoints > 29:
-                mesh3d = self.mesh3d[index][:self.num_keypoints]
+                mesh3d = self.mesh3d[index][:self.num_keypoints] - palm
                 boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, mesh2d, mesh3d, num_keypoints=self.num_keypoints)
             else:
                 boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=self.num_keypoints)

@@ -895,17 +895,19 @@ class RoIHeads(nn.Module):
                 if batch > 0:
                     # Reshape Heatmaps
                     graformer_inputs = keypoint_logits.view(batch, kps, W*H)
-                    keypoint_logits = self.keypoint_graformer2d(graformer_inputs).view(batch, kps, W, H)
+                    keypoint_logits = self.keypoint_graformer2d(graformer_inputs)
+                    keypoint_logits = keypoint_logits.view(batch, kps, W, H)
                     
                     if self.pooling is not None:
                         img_features = self.pooling(features['pool'])
                         img_features = self.feature_extractor(img_features)
                         # print(img_features.unsqueeze(axis=1).repeat(1, kps, 1).shape)
                         img_features = img_features.unsqueeze(axis=1).repeat(1, kps, 1)
-                        print(img_features.shape, graformer_inputs.shape)
+                        # print(img_features.shape, graformer_inputs.shape)
                         
                         graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
                     
+                    graformer_inputs = keypoint_logits.view(batch, kps, W*H)
                     keypoint3d = self.keypoint_graformer(graformer_inputs)
                 
             loss_keypoint = {}
