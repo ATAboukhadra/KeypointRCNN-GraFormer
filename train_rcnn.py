@@ -84,7 +84,7 @@ logging.info(model)
 if use_cuda and torch.cuda.is_available():
     if args.graformer:
         model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-        model.roi_heads.keypoint_graformer2d.mask = model.roi_heads.keypoint_graformer2d.mask.cuda(args.gpu_number[0])
+        # model.roi_heads.keypoint_graformer2d.mask = model.roi_heads.keypoint_graformer2d.mask.cuda(args.gpu_number[0])
 
     
     model = model.cuda(args.gpu_number[0])
@@ -156,6 +156,13 @@ if args.train:
                 logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f' % (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch))
                 running_loss2d = 0.0
                 running_loss3d = 0.0
+        
+        losses.append((train_loss2d / (i+1)).cpu().numpy())
+        
+        if (epoch+1) % args.snapshot_epoch == 0:
+            torch.save(model.state_dict(), args.output_file+str(epoch+1)+'.pkl')
+            np.save(args.output_file+str(epoch+1)+'-losses.npy', np.array(losses))
+
         if args.val and (epoch+1) % args.val_epoch == 0:
             val_loss2d = 0.0
             val_loss3d = 0.0
@@ -177,12 +184,7 @@ if args.train:
                 val_loss3d += loss3d.data
             logging.info('val loss 2d: %.5f, val loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1)))
                 
-        losses.append((train_loss2d / (i+1)).cpu().numpy())
         
-        if (epoch+1) % args.snapshot_epoch == 0:
-            torch.save(model.state_dict(), args.output_file+str(epoch+1)+'.pkl')
-            np.save(args.output_file+str(epoch+1)+'-losses.npy', np.array(losses))
-
         # Decay Learning Rate
         scheduler.step()
     

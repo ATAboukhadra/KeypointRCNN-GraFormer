@@ -16,7 +16,7 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
     # init output containers
     xyz_pred_list, verts_pred_list = list(), list()
 
-    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_21_test_3d.pkl', 'rb'))
+    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_29_test_3d.pkl', 'rb'))
     # print(predictions_dict)
     # read list of evaluation files
     with open(os.path.join(base_path, set_name+'.txt')) as f:
@@ -83,7 +83,7 @@ def pred_template(img, aux_info, predictions, path):
     
     # print(path, aux_info['handJoints3D'], predictions[path].dot(coord_change_mat.T)[order_idx] / 1000)
     
-    xyz = predictions[path].dot(coord_change_mat.T)[order_idx] / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 21 joints
+    xyz = predictions[path][:21].dot(coord_change_mat.T)[order_idx] / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 21 joints
     verts = np.zeros((778, 3)) # 3D coordinates of the shape vertices
     return xyz, verts
 
