@@ -29,8 +29,7 @@ class Dataset(data.Dataset):
         self.points3d = np.load(os.path.join(root, 'points3d-%s.npy' % self.load_set))
 
         self.mesh2d = np.load(os.path.join(root, 'mesh2d-%s.npy' % self.load_set))
-        if self.num_keypoints > 29:
-            self.mesh3d = np.load(os.path.join(root, 'mesh3d-%s.npy' % self.load_set))
+        self.mesh3d = np.load(os.path.join(root, 'mesh3d-%s.npy' % self.load_set))
 
     def __getitem__(self, index):
         """
@@ -62,12 +61,10 @@ class Dataset(data.Dataset):
 
         if self.load_set != 'test':
             bb = calculate_bounding_box(mesh2d, increase=True)
+            boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=self.num_keypoints)
             if self.num_keypoints > 29:
                 mesh3d = self.mesh3d[index][:self.num_keypoints] - palm
-                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, mesh2d, mesh3d, num_keypoints=self.num_keypoints)
-            else:
-                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=self.num_keypoints)
-
+                _, _, _, mesh3d = create_rcnn_data(bb, mesh2d, mesh3d, num_keypoints=self.num_keypoints)
         else:
             bb, mesh2d = np.array([]), np.array([])
             boxes, labels, keypoints, keypoints3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
