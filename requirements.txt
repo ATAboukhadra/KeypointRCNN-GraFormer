@@ -1,4 +1,4 @@
-matplotlib
 opencv-python
+matplotlib
 scipy
 sklearn
