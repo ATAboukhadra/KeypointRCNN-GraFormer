@@ -7,7 +7,7 @@ import scipy.sparse as sp
 import copy, math
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-from .ChebConv import ChebConv, _ResChebGC
+from ChebConv import ChebConv, _ResChebGC
 
 
 def normalize(mx):
@@ -187,7 +187,7 @@ class GraphNet(nn.Module):
         super(GraphNet, self).__init__()
 
         requires_grad=True
-        if n_pts > 200:
+        if n_pts > 100:
             requires_grad = False
         self.A_hat = Parameter(torch.eye(n_pts).float(), requires_grad=requires_grad)
         self.gconv1 = LAM_Gconv(in_features, in_features * 2)
@@ -216,7 +216,6 @@ class GraFormer(nn.Module):
         attn = MultiHeadedAttention(n_head, dim_model)
         gcn = GraphNet(in_features=dim_model, out_features=dim_model, n_pts=n_pts)
 
-        
         for i in range(num_layers):
             _gconv_layers.append(_ResChebGC(adj=self.adj, input_dim=hid_dim, output_dim=hid_dim,
                                                 hid_dim=hid_dim, p_dropout=0.1))
