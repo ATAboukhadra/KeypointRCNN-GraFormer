@@ -1,3 +1,5 @@
+#!/bin/bash
+
 conda create -n pytorch3d python=3.8
 conda activate pytorch3d
 conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch
