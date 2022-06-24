@@ -8,9 +8,9 @@ import copy, math
 import torch.nn.functional as F
 import scipy
 from torch.nn.parameter import Parameter
-from ChebConv import ChebConv, _ResChebGC
-from GraFormer import GraphNet, GraAttenLayer, MultiHeadedAttention
-from GraFormer import adj_mx_from_edges
+from .ChebConv import ChebConv, _ResChebGC
+from .GraFormer import GraphNet, GraAttenLayer, MultiHeadedAttention
+from .GraFormer import adj_mx_from_edges
 
 def create_edges(seq_length=1, num_nodes=29):
 
@@ -45,25 +45,28 @@ class GraphUnpool(nn.Module):
 
 
 class MeshGraFormer(nn.Module):
-    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=3, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='../../HOPE/datasets/adj_matrix'):
+    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=3, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix'):
         super(MeshGraFormer, self).__init__()
         self.n_layers = num_layers
         self.initial_adj = initial_adj
         
         if n_pts == 778:
             initial_pts = 21
+            obj=''
         else:
             initial_pts = 29
+            obj='Object'
         points_levels = [initial_pts, round(n_pts / 16), n_pts // 4, n_pts]
         self.mask = [torch.tensor([[[True] * points_levels[i]]]) for i in range(3)]
         
         self.adj = [initial_adj]
-        self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/handObject{points_levels[i]}.npz').toarray()).float() for i in range(1, 4)])
+        self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/hand{obj}{points_levels[i]}.npz').toarray()).float() for i in range(1, 4)])
         
         # features_levels = [coords_dim[0], 256, 32]
         
         _gconv_input = ChebConv(in_c=coords_dim[0], out_c=hid_dim, K=2)
-        _gconv_layers = []
+        _gconv_layers1 = []
+        _gconv_layers2 = []
         _attention_layer = []
         _unpooling_layer = []
 
@@ -77,11 +80,13 @@ class MeshGraFormer(nn.Module):
             gcn = GraphNet(in_features=dim_model, out_features=dim_model, n_pts=points_levels[i])    
             
             _attention_layer.append(GraAttenLayer(dim_model, c(attn), c(gcn), dropout))
-            _gconv_layers.append(_ResChebGC(adj=self.adj[i], input_dim=dim_model, output_dim=dim_model, hid_dim=dim_model, p_dropout=0.1))
+            _gconv_layers1.append(_ResChebGC(adj=self.adj[i], input_dim=dim_model, output_dim=dim_model, hid_dim=dim_model, p_dropout=0.1))
+            _gconv_layers2.append(_ResChebGC(adj=self.adj[i], input_dim=dim_model, output_dim=dim_model, hid_dim=dim_model, p_dropout=0.1))
             _unpooling_layer.append(GraphUnpool(points_levels[i], points_levels[i+1]))
 
         self.gconv_input = _gconv_input
-        self.gconv_layers = nn.ModuleList(_gconv_layers)
+        self.gconv_layers1 = nn.ModuleList(_gconv_layers1)
+        self.gconv_layers2 = nn.ModuleList(_gconv_layers2)
         self.atten_layers = nn.ModuleList(_attention_layer)
         self.unpooling_layer = nn.ModuleList(_unpooling_layer)
 
@@ -90,15 +95,10 @@ class MeshGraFormer(nn.Module):
     def forward(self, x):
         
         out = self.gconv_input(x, self.initial_adj)
-        print(out.shape)
         for i in range(self.n_layers):
-            print(i)
             out = self.atten_layers[i](out, self.mask[i])
-            print(out.shape)
-        
-            out = self.gconv_layers[i](out)
-            print(out.shape)
-        
+            out = self.gconv_layers1[i](out)
+            out = self.gconv_layers2[i](out)
             out = self.unpooling_layer[i](out)
             print(out.shape)
             

@@ -7,7 +7,7 @@ import scipy.sparse as sp
 import copy, math
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-from ChebConv import ChebConv, _ResChebGC
+from .ChebConv import ChebConv, _ResChebGC
 
 
 def normalize(mx):

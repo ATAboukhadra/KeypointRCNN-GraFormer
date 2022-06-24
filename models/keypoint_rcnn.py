@@ -6,6 +6,8 @@ from torchvision.ops import MultiScaleRoIAlign
 from .faster_rcnn import FasterRCNN, TwoMLPHead
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone, _validate_trainable_layers
 from GraFormer.network.GraFormer import GraFormer, adj_mx_from_edges
+from GraFormer.network.MeshGraFormer import MeshGraFormer
+
 from GraFormer.common.data_utils import create_edges
 
 __all__ = [
@@ -209,6 +211,9 @@ class KeypointRCNN(FasterRCNN):
                 pooling = nn.AdaptiveAvgPool2d((10, 14))
                 feature_extractor = TwoMLPHead(256 * 10 * 14, 1024)
                 input_size += 1024
+
+                mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 3), n_pts=1778, dropout=0.25)
+
             
             keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
 
@@ -236,15 +241,13 @@ class KeypointRCNN(FasterRCNN):
         self.roi_heads.keypoint_head = keypoint_head
         self.roi_heads.keypoint_predictor = keypoint_predictor
 
-        if add_feature_extractor:
-            self.roi_heads.pooling = pooling
-            self.roi_heads.feature_extractor = feature_extractor
-        else:
-            self.roi_heads.pooling = None
-            self.roi_heads.feature_extractor = None
-            
         if add_graformer:
             self.roi_heads.keypoint_graformer = keypoint_graformer
+            if add_feature_extractor:
+                self.roi_heads.pooling = pooling
+                self.roi_heads.feature_extractor = feature_extractor
+                self.roi_heads.mesh_graformer = mesh_graformer
+                
             # self.roi_heads.keypoint_graformer2d = keypoint_graformer2d
 
         else:
