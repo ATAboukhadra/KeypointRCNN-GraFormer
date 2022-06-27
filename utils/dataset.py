@@ -44,12 +44,16 @@ class Dataset(data.Dataset):
         palm = self.points3d[index][0]
         point2d = self.points2d[index]
         point3d = self.points3d[index] - palm # Center around palm
-
+                
         # Loading 2D Mesh for bounding box calculation
         if self.num_keypoints == 21 or self.num_keypoints == 778: #i.e. hand
             mesh2d = self.mesh2d[index][:778]
+            mesh3d = self.mesh3d[index][:778] - palm
+        
         else: # i.e. object
             mesh2d = self.mesh2d[index]
+            mesh3d = self.mesh3d[index] - palm
+        
         # Load image and apply preprocessing if any
         if self.hdf5 is not None:
             data = np.array(self.hdf5[image_path])
@@ -61,13 +65,20 @@ class Dataset(data.Dataset):
 
         if self.load_set != 'test':
             bb = calculate_bounding_box(mesh2d, increase=True)
-            boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=self.num_keypoints)
+            
             if self.num_keypoints > 29:
-                mesh3d = self.mesh3d[index][:self.num_keypoints] - palm
+                if self.num_keypoints == 778:
+                    initial_keypoint=21
+                else:
+                    initial_keypoints=29
+                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=initial_keypoints)
                 _, _, _, mesh3d = create_rcnn_data(bb, mesh2d, mesh3d, num_keypoints=self.num_keypoints)
+            else:
+                boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=self.num_keypoints)
+                mesh3d = torch.tensor([])
         else:
             bb, mesh2d = np.array([]), np.array([])
-            boxes, labels, keypoints, keypoints3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
+            boxes, labels, keypoints, keypoints3d, mesh3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
 
         data = {
             'path': image_path,
@@ -80,7 +91,8 @@ class Dataset(data.Dataset):
             'boxes': boxes,
             'labels': labels,
             'keypoints': keypoints,
-            'keypoints3d': keypoints3d 
+            'keypoints3d': keypoints3d,
+            'mesh3d': mesh3d
         }
 
         return data

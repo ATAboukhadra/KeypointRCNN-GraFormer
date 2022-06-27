@@ -9,8 +9,7 @@ import torch.nn.functional as F
 import scipy
 from torch.nn.parameter import Parameter
 from .ChebConv import ChebConv, _ResChebGC
-from .GraFormer import GraphNet, GraAttenLayer, MultiHeadedAttention
-from .GraFormer import adj_mx_from_edges
+from .GraFormer import GraphNet, GraAttenLayer, MultiHeadedAttention, adj_mx_from_edges
 
 def create_edges(seq_length=1, num_nodes=29):
 
@@ -45,7 +44,7 @@ class GraphUnpool(nn.Module):
 
 
 class MeshGraFormer(nn.Module):
-    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=3, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix'):
+    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=3, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix', device='cuda:1'):
         super(MeshGraFormer, self).__init__()
         self.n_layers = num_layers
         self.initial_adj = initial_adj
@@ -57,10 +56,10 @@ class MeshGraFormer(nn.Module):
             initial_pts = 29
             obj='Object'
         points_levels = [initial_pts, round(n_pts / 16), n_pts // 4, n_pts]
-        self.mask = [torch.tensor([[[True] * points_levels[i]]]) for i in range(3)]
+        self.mask = [torch.tensor([[[True] * points_levels[i]]]).to(device) for i in range(3)]
         
-        self.adj = [initial_adj]
-        self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/hand{obj}{points_levels[i]}.npz').toarray()).float() for i in range(1, 4)])
+        self.adj = [initial_adj.to(device)]
+        self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/hand{obj}{points_levels[i]}.npz').toarray()).float().to(device) for i in range(1, 4)])
         
         # features_levels = [coords_dim[0], 256, 32]
         
@@ -93,17 +92,14 @@ class MeshGraFormer(nn.Module):
         self.gconv_output = ChebConv(in_c=dim_model, out_c=coords_dim[1], K=2)
 
     def forward(self, x):
-        
         out = self.gconv_input(x, self.initial_adj)
         for i in range(self.n_layers):
             out = self.atten_layers[i](out, self.mask[i])
             out = self.gconv_layers1[i](out)
             out = self.gconv_layers2[i](out)
             out = self.unpooling_layer[i](out)
-            print(out.shape)
             
         out = self.gconv_output(out, self.adj[-1])
-        # print(out.shape)
         
         return out
 

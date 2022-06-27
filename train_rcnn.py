@@ -75,17 +75,23 @@ if args.val:
 
 """ load model """
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, 
+if num_keypoints > 29:
+    init_num_kps = 21 if num_keypoints == 778 else 29
+else:
+    init_num_kps = num_keypoints
+
+model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
                                 rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1,
-                                device=device, add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
+                                device=device, add_graformer=args.graformer)
 print('Keypoint RCNN is loaded')
-logging.info(model)
 
 if use_cuda and torch.cuda.is_available():
     if args.graformer:
         model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-        # model.roi_heads.keypoint_graformer2d.mask = model.roi_heads.keypoint_graformer2d.mask.cuda(args.gpu_number[0])
-
+        if num_keypoints > 29:
+            model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
+            model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]
+            
     
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
@@ -108,7 +114,7 @@ optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_step_gamma)
 scheduler.last_epoch = start
 
-keys = ['boxes', 'labels', 'keypoints', 'keypoints3d']
+keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d']
 
 """ training """
 
@@ -121,6 +127,8 @@ if args.train:
         train_loss2d = 0.0
         running_loss3d = 0.0
         train_loss3d = 0.0
+        running_mesh_loss3d = 0.0
+        train_mesh_loss3d = 0.0
         
         for i, tr_data in enumerate(trainloader):
             
@@ -145,7 +153,11 @@ if args.train:
             # print statistics
             loss2d = loss_dict['loss_keypoint']
             loss3d = loss_dict['loss_keypoint3d']
-            
+            if 'loss_mesh3d' in loss_dict.keys():
+                mesh_loss3d = loss_dict['loss_mesh3d']
+                running_mesh_loss3d += mesh_loss3d.data
+                train_mesh_loss3d += mesh_loss3d.data
+                
             # print(loss_dict['loss_keypoint3d'])
             running_loss2d += loss2d.data
             train_loss2d += loss2d.data
@@ -153,7 +165,13 @@ if args.train:
             train_loss3d += loss3d.data
             
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
-                logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f' % (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch))
+                if 'loss_mesh3d' in loss_dict.keys():
+                    logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
+                    (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch, running_mesh_loss3d / args.log_batch))
+                    running_mesh_loss3d = 0.0
+                else:
+
+                    logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f' % (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch))
                 running_loss2d = 0.0
                 running_loss3d = 0.0
         

@@ -227,6 +227,7 @@ class GraFormer(nn.Module):
         self.gconv_output = ChebConv(in_c=dim_model, out_c=coords_dim[1], K=2)
 
     def forward(self, x):
+        # print(x.shape, self.adj.shape)
         out = self.gconv_input(x, self.adj)
         for i in range(self.n_layers):
             out = self.atten_layers[i](out, self.mask)
