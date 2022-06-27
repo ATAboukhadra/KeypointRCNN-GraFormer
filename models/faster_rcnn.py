@@ -3,9 +3,6 @@ import torch.nn.functional as F
 
 from torchvision.ops import MultiScaleRoIAlign
 
-from torchvision.models.detection._utils import overwrite_eps
-from torchvision._internally_replaced_utils import load_state_dict_from_url
-
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 from .generalized_rcnn import GeneralizedRCNN
 from torchvision.models.detection.rpn import RPNHead, RegionProposalNetwork

@@ -231,7 +231,6 @@ class KeypointRCNN(FasterRCNN):
         else:
             self.roi_heads.keypoint_graformer = None
 
-
 class KeypointRCNNHeads(nn.Sequential):
     def __init__(self, in_channels, layers):
         d = []
