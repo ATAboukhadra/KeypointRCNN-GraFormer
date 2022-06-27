@@ -12,16 +12,6 @@ from torchvision.models.detection import _utils as det_utils
 
 from typing import Optional, List, Dict, Tuple
 
-from pytorch3d.loss import (
-    mesh_edge_loss, 
-    mesh_laplacian_smoothing, 
-    mesh_normal_consistency,
-    chamfer_distance
-)
-from pytorch3d.structures import Meshes
-from pytorch3d.io import load_obj, save_obj
- 
-
 def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
     # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
     """
@@ -300,9 +290,6 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     if keypoint3d_pred is not None:
 
         for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, midx in zip(proposals, gt_keypoints, keypoint3d_gt, keypoint_matched_idxs):
-            # if proposals_per_image.shape[0] > 1:
-            #     print(keypoint_matched_idxs)
-            # print(proposals_per_image.shape[0])
             kp = gt_kp_in_image[midx]
             kp3d = gt_kp3d_in_image[midx]
 
@@ -337,28 +324,8 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         keypoint_targets3d = torch.cat(kps3d, dim=0)
         keypoint3d_pred = keypoint3d_pred.view(N * K, 3)
         keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
-        # print(keypoint_targets3d[valid].shape, keypoint3d_pred.shape)
         keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid]) / 1000
         
-        if K >= 778:
-            faces_idx = get_hand_object_faces(K).to('cuda:1')
-            trg_mesh = Meshes(verts=[keypoint3d_pred[valid]], faces=[faces_idx])
-            
-            # src_mesh = Meshes(verts=[keypoint_targets3d[valid]], faces=[faces_idx])
-            # We compare the two sets of pointclouds by computing (a) the chamfer loss
-            # loss_chamfer, _ = chamfer_distance(keypoint3d_pred[valid], keypoint_targets3d[valid])
-            
-            # and (b) the edge length of the predicted mesh
-            loss_edge = mesh_edge_loss(trg_mesh)
-            # mesh normal consistency
-            loss_normal = mesh_normal_consistency(trg_mesh)
-            # mesh laplacian smoothing
-            loss_laplacian = mesh_laplacian_smoothing(trg_mesh, method="uniform")
-            # Weighted sum of the losses
-            # print(loss_edge, loss_laplacian* 0.1 , loss_normal* 0.01)
-            keypoint3d_loss += loss_edge + loss_laplacian * 0.1  + loss_normal * 0.01
-        
-        # Print the losses
         return keypoint_loss, keypoint3d_loss
     else:
         return keypoint_loss
@@ -900,26 +867,13 @@ class RoIHeads(nn.Module):
             keypoint_features = self.keypoint_head(keypoint_features)
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
-            # print(batch)
+            
             # Heatmap refinement using GraFormer
             if self.keypoint_graformer is not None:
                 keypoint3d = torch.zeros((21, 3))
                 if batch > 0:
                     # Reshape Heatmaps
                     graformer_inputs = keypoint_logits.view(batch, kps, W*H)
-                    # keypoint_logits = self.keypoint_graformer2d(graformer_inputs)
-                    # keypoint_logits = keypoint_logits.view(batch, kps, W, H)
-                    
-                    if self.pooling is not None:
-                        img_features = self.pooling(features['pool'])
-                        img_features = self.feature_extractor(img_features)
-                        # print(img_features.unsqueeze(axis=1).repeat(1, kps, 1).shape)
-                        img_features = img_features.unsqueeze(axis=1).repeat(1, kps, 1)
-                        # print(img_features.shape, graformer_inputs.shape)
-                        
-                        graformer_inputs = torch.cat((graformer_inputs, img_features), axis=2)
-                    
-                    # graformer_inputs = keypoint_logits.view(batch, kps, W*H)
                     keypoint3d = self.keypoint_graformer(graformer_inputs)
                 
             loss_keypoint = {}
@@ -958,21 +912,3 @@ class RoIHeads(nn.Module):
             losses.update(loss_keypoint)
 
         return result, losses
-# 
-
-def get_hand_object_faces(kps=778):
-    src_obj = os.path.join('../HOPE/datasets/hands', 'hand_model_778.obj')
-    verts, faces, aux = load_obj(src_obj)
-    hand_faces = faces.verts_idx
-
-    if kps > 778:
-        src_obj = os.path.join('../HOPE/datasets/spheres', 'sphere_1000.obj')
-        verts, faces, aux = load_obj(src_obj)
-        object_faces = faces.verts_idx
-        object_faces = object_faces + 778
-
-        final_faces = torch.cat((hand_faces, object_faces), axis=0)
-    
-    else:
-        final_faces = hand_faces
-    return final_faces

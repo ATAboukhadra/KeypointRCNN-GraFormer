@@ -77,15 +77,13 @@ if args.val:
 
 model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, 
                                 rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1,
-                                device=device, add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
+                                device=device, add_graformer=args.graformer)
 print('Keypoint RCNN is loaded')
 logging.info(model)
 
 if use_cuda and torch.cuda.is_available():
     if args.graformer:
         model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-        # model.roi_heads.keypoint_graformer2d.mask = model.roi_heads.keypoint_graformer2d.mask.cuda(args.gpu_number[0])
-
     
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
@@ -149,6 +147,7 @@ if args.train:
             # print(loss_dict['loss_keypoint3d'])
             running_loss2d += loss2d.data
             train_loss2d += loss2d.data
+            
             running_loss3d += loss3d.data
             train_loss3d += loss3d.data
             

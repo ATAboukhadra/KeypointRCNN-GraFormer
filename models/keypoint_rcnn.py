@@ -169,7 +169,7 @@ class KeypointRCNN(FasterRCNN):
                  bbox_reg_weights=None,
                  # keypoint parameters
                  keypoint_roi_pool=None, keypoint_head=None, keypoint_predictor=None,
-                 num_keypoints=17, device='cpu', add_graformer=False, add_feature_extractor=False):
+                 num_keypoints=17, device='cpu', add_graformer=False):
 
         assert isinstance(keypoint_roi_pool, (MultiScaleRoIAlign, type(None)))
         if min_size is None:
@@ -195,23 +195,6 @@ class KeypointRCNN(FasterRCNN):
             keypoint_dim_reduced = 512  # == keypoint_layers[-1]
             keypoint_predictor = KeypointRCNNPredictor(keypoint_dim_reduced, num_keypoints)
 
-        if add_graformer:
-            print("==> Creating model...")
-
-            input_size = 3136
-            # GraFormer
-            edges = create_edges(num_nodes=num_keypoints)
-            adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            keypoint_graformer2d = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, input_size), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
-            
-            if add_feature_extractor:
-                # Feature Extractor
-                pooling = nn.AdaptiveAvgPool2d((10, 14))
-                feature_extractor = TwoMLPHead(256 * 10 * 14, 1024)
-                input_size += 1024
-            
-            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
-
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
             # transform parameters
@@ -236,20 +219,17 @@ class KeypointRCNN(FasterRCNN):
         self.roi_heads.keypoint_head = keypoint_head
         self.roi_heads.keypoint_predictor = keypoint_predictor
 
-        if add_feature_extractor:
-            self.roi_heads.pooling = pooling
-            self.roi_heads.feature_extractor = feature_extractor
-        else:
-            self.roi_heads.pooling = None
-            self.roi_heads.feature_extractor = None
-            
         if add_graformer:
-            self.roi_heads.keypoint_graformer = keypoint_graformer
-            self.roi_heads.keypoint_graformer2d = keypoint_graformer2d
+            print("==> Creating model...")
 
+            input_size = 3136
+            # GraFormer
+            edges = create_edges(num_nodes=num_keypoints)
+            adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
+            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+            self.roi_heads.keypoint_graformer = keypoint_graformer
         else:
             self.roi_heads.keypoint_graformer = None
-            self.roi_heads.keypoint_graformer2d = None
 
 
 class KeypointRCNNHeads(nn.Sequential):
