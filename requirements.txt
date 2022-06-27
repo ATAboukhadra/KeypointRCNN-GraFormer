@@ -1,3 +1,4 @@
-matplotlib
-scipy
-sklearn
+python-opencv
+# matplotlib
+# scipy
+# sklearn
