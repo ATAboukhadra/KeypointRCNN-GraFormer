@@ -357,10 +357,10 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         
         if mesh3d_pred is not None:
             N, K, D = mesh3d_pred.shape
-
+            # print(mesh3d_pred.shape)
             mesh_targets3d = torch.cat(meshes3d, dim=0)
-            mesh3d_pred = mesh3d_pred.view(N * K, 3)
-            mesh_targets3d = mesh_targets3d.view(N * K, 3)
+            mesh3d_pred = torch.reshape(mesh3d_pred, (N * K, D))
+            mesh_targets3d = torch.reshape(mesh_targets3d, (N * K, D))
             mesh3d_loss = F.mse_loss(mesh3d_pred[valid], mesh_targets3d[valid]) / 1000
         
             # faces_idx = get_hand_object_faces(K).to('cuda:1')
@@ -932,16 +932,17 @@ class RoIHeads(nn.Module):
                     # Reshape Heatmaps
                     graformer_inputs = keypoint_logits.view(batch, kps, W*H)
                     keypoint3d = self.keypoint_graformer(graformer_inputs)
-            
-                if self.mesh_graformer is not None:
-                    graformer_features = self.feature_extractor(graformer_features)
-                    graformer_features = graformer_features.unsqueeze(axis=1).repeat(1, kps, 1)
-                    # print(img_features.shape)
-                    mesh_graformer_inputs = torch.cat((graformer_inputs, graformer_features), axis=2)
-                    # print(mesh_graformer_inputs.shape)
-                    # TODO: append features
-                    mesh3d = self.mesh_graformer(mesh_graformer_inputs)
-
+                    
+                    # mesh3d = torch.zeros((778, 3))
+                    if self.mesh_graformer is not None:
+                        graformer_features = self.feature_extractor(graformer_features)
+                        graformer_features = graformer_features.unsqueeze(axis=1).repeat(1, kps, 1)
+                        # print(img_features.shape)
+                        mesh_graformer_inputs = torch.cat((graformer_inputs, graformer_features), axis=2)
+                        # print(mesh_graformer_inputs.shape)
+                        # TODO: append features
+                        mesh3d = self.mesh_graformer(mesh_graformer_inputs)
+                        # print(mesh3d.shape)
             loss_keypoint = {}
             if self.training:
                 assert targets is not None

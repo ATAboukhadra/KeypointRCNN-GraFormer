@@ -45,14 +45,6 @@ class Dataset(data.Dataset):
         point2d = self.points2d[index]
         point3d = self.points3d[index] - palm # Center around palm
                 
-        # Loading 2D Mesh for bounding box calculation
-        if self.num_keypoints == 21 or self.num_keypoints == 778: #i.e. hand
-            mesh2d = self.mesh2d[index][:778]
-            mesh3d = self.mesh3d[index][:778] - palm
-        
-        else: # i.e. object
-            mesh2d = self.mesh2d[index]
-            mesh3d = self.mesh3d[index] - palm
         
         # Load image and apply preprocessing if any
         if self.hdf5 is not None:
@@ -64,13 +56,22 @@ class Dataset(data.Dataset):
         inputs = self.transform(original_image)  # [:3]
 
         if self.load_set != 'test':
+            # Loading 2D Mesh for bounding box calculation
+            if self.num_keypoints == 21 or self.num_keypoints == 778: #i.e. hand
+                mesh2d = self.mesh2d[index][:778]
+                mesh3d = self.mesh3d[index][:778] - palm
+            else: # i.e. object
+                mesh2d = self.mesh2d[index]
+                mesh3d = self.mesh3d[index] - palm
+      
             bb = calculate_bounding_box(mesh2d, increase=True)
             
             if self.num_keypoints > 29:
                 if self.num_keypoints == 778:
-                    initial_keypoint=21
+                    initial_keypoints=21
                 else:
                     initial_keypoints=29
+
                 boxes, labels, keypoints, keypoints3d = create_rcnn_data(bb, point2d, point3d, num_keypoints=initial_keypoints)
                 _, _, _, mesh3d = create_rcnn_data(bb, mesh2d, mesh3d, num_keypoints=self.num_keypoints)
             else:

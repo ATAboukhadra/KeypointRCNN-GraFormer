@@ -83,16 +83,17 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
     # Plot GT 2D keypoints
     gt_image = np.copy(img)
     if labels is not None:
-        keypoints = labels['keypoints'][0][:num_keypoints]
+        keypoints = labels['keypoints'][0]
         ax = fig.add_subplot(height, width, 2)
         mesh_ax = ax
-        if num_keypoints > 29: # i.e. mesh
-            show2DMesh(fig, ax, gt_image, keypoints, gt=True, filename=filename)
-        else: # i.e. pose
-            gt_image = showHandJoints(gt_image, keypoints[:21])
-            if num_keypoints > 21:
-                gt_image = showObjJoints(gt_image, keypoints[21:])
-            ax.imshow(gt_image)
+        # if num_keypoints > 29: # i.e. mesh
+        #     show2DMesh(fig, ax, gt_image, keypoints, gt=True, filename=filename)
+        # else: # i.e. pose
+        gt_image = showHandJoints(gt_image, keypoints[:21])
+        if keypoints.shape[0] > 21:
+            gt_image = showObjJoints(gt_image, keypoints[21:])
+        
+        ax.imshow(gt_image)
         ax.title.set_text('GT keypoints')
 
         # Plot GT 3D Keypoints
@@ -100,7 +101,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
         ax = fig.add_subplot(height, width, 3, projection="3d")
         
         if num_keypoints > 29:
-            plot3dVisualize(ax, keypoints3d[:num_keypoints], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
+            keypoints3d = labels['mesh3d'][0]
+            plot3dVisualize(ax, keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
             if num_keypoints > 778:
                 plot3dVisualize(ax, keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
             cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
@@ -116,20 +118,19 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21):
     pred_image = np.copy(img)
     keypoints2d = predictions['keypoints'][idx]
 
-    ax = fig.add_subplot(height, width, 5)
-    if num_keypoints > 29: # i.e. mesh
-        show2DMesh(fig, ax, pred_image, keypoints2d, gt=False, filename=filename)
-    else: # i.e. pose
-        pred_image = showHandJoints(pred_image, keypoints2d[:21], filename=filename)
-        if num_keypoints > 21:
-            pred_image = showObjJoints(pred_image, keypoints2d[21:], filename=filename)
-        ax.imshow(pred_image)
+    ax = fig.add_subplot(height, width, 5)     
+    pred_image = showHandJoints(pred_image, keypoints2d[:21], filename=filename)
+    if keypoints2d.shape[0] > 21:
+        pred_image = showObjJoints(pred_image, keypoints2d[21:], filename=filename)
+    ax.imshow(pred_image)
     ax.title.set_text('Predicted keypoints')
 
     # Plot predicted 3D keypoints
     ax = fig.add_subplot(height, width, 6, projection="3d")
     if num_keypoints > 29:
-        plot3dVisualize(ax, predicted_keypoints3d[:num_keypoints], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
+        predicted_keypoints3d = predictions['mesh3d'][idx]
+            
+        plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
         if num_keypoints > 778:
             plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
         cam_equal_aspect_3d(ax, predicted_keypoints3d[:num_keypoints], flip_x=False)
@@ -208,10 +209,13 @@ else:
     
 if args.generate_mesh:
     if args.object:
+        init_num_keypoints = 29
         num_keypoints = 1778
     else:
+        init_num_keypoints = 21
         num_keypoints = 778
-
+else:
+    init_num_keypoints = num_keypoints
 testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, num_keypoints=num_keypoints)
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=16, collate_fn=collate_fn)
 print(len(testloader.dataset))
@@ -224,9 +228,8 @@ if args.gpu:
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=num_keypoints, num_classes=2, device=device,
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
-                                add_graformer=args.graformer, add_feature_extractor=args.feature_extractor)
+model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_keypoints, num_keypoints=num_keypoints, num_classes=2, device=device,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, add_graformer=args.graformer)
 
 if args.gpu and torch.cuda.is_available():
     if args.graformer:
@@ -244,7 +247,7 @@ print('model loaded!')
 
 minLoss = 100000
 criterion = nn.MSELoss()
-keys = ['boxes', 'labels', 'keypoints', 'keypoints3d']
+keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d']
 c = 0
 output_dict = {}
 errors = []
