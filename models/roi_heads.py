@@ -361,10 +361,12 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
             mesh_targets3d = torch.cat(meshes3d, dim=0)
             mesh3d_pred = torch.reshape(mesh3d_pred, (N * K, D))
             mesh_targets3d = torch.reshape(mesh_targets3d, (N * K, D))
-            mesh3d_loss = F.mse_loss(mesh3d_pred[valid], mesh_targets3d[valid]) / 1000
+            
+            mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000
         
             # faces_idx = get_hand_object_faces(K).to('cuda:1')
-            # trg_mesh = Meshes(verts=[mesh3d_pred[valid]], faces=[faces_idx])
+            # # print(mesh3d_pred[valid].shape)
+            # trg_mesh = Meshes(verts=[mesh3d_pred], faces=[faces_idx])
             
             # # src_mesh = Meshes(verts=[keypoint_targets3d[valid]], faces=[faces_idx])
             # # We compare the two sets of pointclouds by computing (a) the chamfer loss
@@ -377,8 +379,8 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
             # # mesh laplacian smoothing
             # loss_laplacian = mesh_laplacian_smoothing(trg_mesh, method="uniform")
             # # Weighted sum of the losses
-            # # print(loss_edge, loss_laplacian* 0.1 , loss_normal* 0.01)
-            # mesh3d_loss += loss_edge + loss_laplacian * 0.1  + loss_normal * 0.01
+            # print(loss_edge, loss_laplacian* 0.1 , loss_normal * 0.01)
+            # mesh3d_loss += 0.1 * loss_edge + loss_laplacian * 0.01  + loss_normal * 0.01
             return keypoint_loss, keypoint3d_loss, mesh3d_loss
         # Print the losses
         return keypoint_loss, keypoint3d_loss
@@ -928,12 +930,13 @@ class RoIHeads(nn.Module):
             # Heatmap refinement using GraFormer
             if self.keypoint_graformer is not None:
                 keypoint3d = torch.zeros((21, 3))
+                mesh3d = torch.zeros((778, 3))
+
                 if batch > 0:
                     # Reshape Heatmaps
                     graformer_inputs = keypoint_logits.view(batch, kps, W*H)
                     keypoint3d = self.keypoint_graformer(graformer_inputs)
                     
-                    # mesh3d = torch.zeros((778, 3))
                     if self.mesh_graformer is not None:
                         graformer_features = self.feature_extractor(graformer_features)
                         graformer_features = graformer_features.unsqueeze(axis=1).repeat(1, kps, 1)
