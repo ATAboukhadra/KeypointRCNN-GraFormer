@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import scipy
 from torch.nn.parameter import Parameter
 from .ChebConv import ChebConv, _ResChebGC
-from .GraFormer import GraphNet, GraAttenLayer, MultiHeadedAttention, adj_mx_from_edges
+from .GraFormer import GraphNet, GraAttenLayer, MultiHeadedAttention, adj_mx_from_edges, attention
 
 def create_edges(seq_length=1, num_nodes=29):
 
@@ -44,62 +44,70 @@ class GraphUnpool(nn.Module):
 
 
 class MeshGraFormer(nn.Module):
-    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=3, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix', device='cuda:1'):
+    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=5, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix', device='cuda:1'):
         super(MeshGraFormer, self).__init__()
         self.n_layers = num_layers
         self.initial_adj = initial_adj
-        
+        self.num_points_levels = 3
         if n_pts == 778:
             initial_pts = 21
             obj=''
         else:
             initial_pts = 29
             obj='Object'
+        
+        hid_dim_list = [256, 64, 16, coords_dim[1]]
         points_levels = [initial_pts, round(n_pts / 16), n_pts // 4, n_pts]
         self.mask = [torch.tensor([[[True] * points_levels[i]]]).to(device) for i in range(3)]
         
         self.adj = [initial_adj.to(device)]
         self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/hand{obj}{points_levels[i]}.npz').toarray()).float().to(device) for i in range(1, 4)])
-        
-        # features_levels = [coords_dim[0], 256, 32]
-        
-        _gconv_input = ChebConv(in_c=coords_dim[0], out_c=hid_dim, K=2)
-        _gconv_layers1 = []
-        _gconv_layers2 = []
-        _attention_layer = []
-        _unpooling_layer = []
-
-        dim_model = hid_dim
+                
+        gconv_inputs = []
+        gconv_layers = []
+        attention_layers = []
+        unpooling_layers = []
+        gconv_outputs = []
         c = copy.deepcopy
         
-        
-        for i in range(num_layers):
-            
-            attn = MultiHeadedAttention(n_head, dim_model)
-            gcn = GraphNet(in_features=dim_model, out_features=dim_model, n_pts=points_levels[i])    
-            
-            _attention_layer.append(GraAttenLayer(dim_model, c(attn), c(gcn), dropout))
-            _gconv_layers1.append(_ResChebGC(adj=self.adj[i], input_dim=dim_model, output_dim=dim_model, hid_dim=dim_model, p_dropout=0.1))
-            _gconv_layers2.append(_ResChebGC(adj=self.adj[i], input_dim=dim_model, output_dim=dim_model, hid_dim=dim_model, p_dropout=0.1))
-            _unpooling_layer.append(GraphUnpool(points_levels[i], points_levels[i+1]))
+        self.gconv_input = ChebConv(in_c=coords_dim[0], out_c=hid_dim_list[0], K=2)
 
-        self.gconv_input = _gconv_input
-        self.gconv_layers1 = nn.ModuleList(_gconv_layers1)
-        self.gconv_layers2 = nn.ModuleList(_gconv_layers2)
-        self.atten_layers = nn.ModuleList(_attention_layer)
-        self.unpooling_layer = nn.ModuleList(_unpooling_layer)
+        for i in range(self.num_points_levels):
+            hid_dim = hid_dim_list[i]
+            
+            gconv_inputs.append(ChebConv(in_c=hid_dim, out_c=hid_dim, K=2))
+            
+            attn = MultiHeadedAttention(n_head, hid_dim)
+            gcn = GraphNet(in_features=hid_dim, out_features=hid_dim, n_pts=points_levels[i])    
+            attention_layer = []
+            gconv_layer = []
 
-        self.gconv_output = ChebConv(in_c=dim_model, out_c=coords_dim[1], K=2)
+            for j in range(num_layers):
+                gconv_layer = _ResChebGC(adj=self.adj[i], input_dim=hid_dim, output_dim=hid_dim, hid_dim=hid_dim, p_dropout=0.1)
+                attention_layer = GraAttenLayer(hid_dim, c(attn), c(gcn), dropout)
+                attention_layers.append(attention_layer)
+                gconv_layers.append(gconv_layer)
+            
+            gconv_outputs.append(ChebConv(in_c=hid_dim, out_c=hid_dim_list[i+1], K=2))
+            unpooling_layers.append(GraphUnpool(points_levels[i], points_levels[i+1]))
+            
+        self.gconv_inputs = nn.ModuleList(gconv_inputs)
+        self.gconv_layers = nn.ModuleList(gconv_layers)
+        self.atten_layers = nn.ModuleList(attention_layers)
+        self.gconv_output = nn.ModuleList(gconv_outputs)
+
+        self.unpooling_layer = nn.ModuleList(unpooling_layers)
+
 
     def forward(self, x):
-        out = self.gconv_input(x, self.initial_adj)
-        for i in range(self.n_layers):
-            out = self.atten_layers[i](out, self.mask[i])
-            out = self.gconv_layers1[i](out)
-            out = self.gconv_layers2[i](out)
+        out = self.gconv_input(x, self.adj[0])
+        for i in range(self.num_points_levels):
+            out = self.gconv_inputs[i](out, self.adj[i])
+            for j in range(self.n_layers):
+                out = self.atten_layers[i * self.n_layers + j](out, self.mask[i])
+                out = self.gconv_layers[i * self.n_layers + j](out)
+            out = self.gconv_output[i](out, self.adj[i])
             out = self.unpooling_layer[i](out)
-            
-        out = self.gconv_output(out, self.adj[-1])
         
         return out
 
