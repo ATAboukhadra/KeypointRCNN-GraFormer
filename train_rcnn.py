@@ -153,6 +153,7 @@ if args.train:
             # print statistics
             loss2d = loss_dict['loss_keypoint']
             loss3d = loss_dict['loss_keypoint3d']
+            
             if 'loss_mesh3d' in loss_dict.keys():
                 mesh_loss3d = loss_dict['loss_mesh3d']
                 running_mesh_loss3d += mesh_loss3d.data
@@ -174,7 +175,6 @@ if args.train:
                     logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f' % (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch))
                 running_loss2d = 0.0
                 running_loss3d = 0.0
-        
         losses.append((train_loss2d / (i+1)).cpu().numpy())
         
         if (epoch+1) % args.snapshot_epoch == 0:
@@ -184,7 +184,7 @@ if args.train:
         if args.val and (epoch+1) % args.val_epoch == 0:
             val_loss2d = 0.0
             val_loss3d = 0.0
-
+            val_mesh_loss3d = 0.0
             for v, val_data in enumerate(valloader):
                 # get the inputs
                 data_dict = val_data
@@ -200,9 +200,13 @@ if args.train:
 
                 val_loss2d += loss2d.data
                 val_loss3d += loss3d.data
-            logging.info('val loss 2d: %.5f, val loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1)))
-                
-        
+            
+                if 'loss_mesh3d' in loss_dict.keys():
+                    mesh_loss3d = loss_dict['loss_mesh3d']
+                    val_mesh_loss3d += mesh_loss3d.data
+            
+            logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
+            
         # Decay Learning Rate
         scheduler.step()
     
