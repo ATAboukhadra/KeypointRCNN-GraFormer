@@ -1,16 +1,13 @@
-import torch
-import torchvision
 import os
+from typing import Dict, List, Optional, Tuple
+
+import torch
 import torch.nn.functional as F
-from torch import nn, Tensor
-
-from torchvision.ops import boxes as box_ops
-
-from torchvision.ops import roi_align
-
+import torchvision
+from torch import Tensor, nn
 from torchvision.models.detection import _utils as det_utils
-
-from typing import Optional, List, Dict, Tuple
+from torchvision.ops import boxes as box_ops
+from torchvision.ops import roi_align
 
 # from pytorch3d.loss import (
 #     mesh_edge_loss, 
@@ -316,7 +313,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
                 kp = gt_kp_in_image[midx]
                 kp3d = gt_kp3d_in_image[midx]
                 mesh3d = gt_mesh3d_in_image[midx]
-
+                
                 heatmaps_per_image, valid_per_image = keypoints_to_heatmap(kp, proposals_per_image, discretization_size)
                 
                 heatmaps.append(heatmaps_per_image.view(-1))
@@ -364,23 +361,11 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
             
             mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000
         
-            # faces_idx = get_hand_object_faces(K).to('cuda:1')
-            # # print(mesh3d_pred[valid].shape)
-            # trg_mesh = Meshes(verts=[mesh3d_pred], faces=[faces_idx])
-            
-            # # src_mesh = Meshes(verts=[keypoint_targets3d[valid]], faces=[faces_idx])
-            # # We compare the two sets of pointclouds by computing (a) the chamfer loss
-            # # loss_chamfer, _ = chamfer_distance(keypoint3d_pred[valid], keypoint_targets3d[valid])
-            
-            # # and (b) the edge length of the predicted mesh
-            # loss_edge = mesh_edge_loss(trg_mesh)
-            # # mesh normal consistency
-            # loss_normal = mesh_normal_consistency(trg_mesh)
-            # # mesh laplacian smoothing
-            # loss_laplacian = mesh_laplacian_smoothing(trg_mesh, method="uniform")
-            # # Weighted sum of the losses
-            # print(loss_edge, loss_laplacian* 0.1 , loss_normal * 0.01)
-            # mesh3d_loss += 0.1 * loss_edge + loss_laplacian * 0.01  + loss_normal * 0.01
+            # mesh3d_loss_smooth = calculate_smoothing_loss(mesh3d_pred[:K], K)
+            # if N > 1:
+            #     mesh3d_loss_smooth += calculate_smoothing_loss(mesh3d_pred[K:K*2], K)
+            # mesh3d_loss += mesh3d_loss_smooth
+
             return keypoint_loss, keypoint3d_loss, mesh3d_loss
         # Print the losses
         return keypoint_loss, keypoint3d_loss
@@ -959,6 +944,10 @@ class RoIHeads(nn.Module):
                     if self.mesh_graformer is not None:
                         mesh3d_gt = [t["mesh3d"] for t in targets]
 
+                        # Shift back
+                        if "palm" in targets[0].keys():
+                            palm_gt = [t["palm"] for t in targets]
+
                         rcnn_loss_keypoint, rcnn_loss_keypoint3d, rcnn_loss_mesh3d = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, 
                                                                                     keypoint3d, keypoints3d_gt, mesh3d, mesh3d_gt)
                         loss_keypoint = {
@@ -1015,3 +1004,25 @@ def get_hand_object_faces(kps=778):
     else:
         final_faces = hand_faces
     return final_faces
+
+def calculate_smoothing_loss(mesh3d, K=778):
+    
+    faces_idx = get_hand_object_faces(K).to('cuda:1')
+            
+    trg_mesh = Meshes(verts=[mesh3d], faces=[faces_idx])
+            
+    # src_mesh = Meshes(verts=[keypoint_targets3d[valid]], faces=[faces_idx])
+    # We compare the two sets of pointclouds by computing (a) the chamfer loss
+    # loss_chamfer, _ = chamfer_distance(keypoint3d_pred[valid], keypoint_targets3d[valid])
+    
+    # and (b) the edge length of the predicted mesh
+    loss_edge = mesh_edge_loss(trg_mesh)
+    # mesh normal consistency
+    loss_normal = mesh_normal_consistency(trg_mesh)
+    # mesh laplacian smoothing
+    loss_laplacian = mesh_laplacian_smoothing(trg_mesh, method="uniform")
+    # Weighted sum of the losses
+    # print(loss_edge, loss_laplacian* 0.1 , loss_normal * 0.01)
+    mesh3d_loss_smooth = 0.01 * loss_edge + loss_laplacian * 0.001  + loss_normal * 0.00001
+
+    return mesh3d_loss_smooth
