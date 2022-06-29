@@ -363,7 +363,12 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
             mesh_targets3d = torch.reshape(mesh_targets3d, (N * K, D))
             
             mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000
-        
+
+            # mesh3d_loss_smooth = calculate_smoothing_loss(mesh3d_pred[:K], K)
+            # if N > 1:
+            #     mesh3d_loss_smooth += calculate_smoothing_loss(mesh3d_pred[K:K*2], K)
+            # mesh3d_loss += mesh3d_loss_smooth
+
             return keypoint_loss, keypoint3d_loss, mesh3d_loss
         # Print the losses
         return keypoint_loss, keypoint3d_loss
