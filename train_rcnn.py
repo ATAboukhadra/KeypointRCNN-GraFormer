@@ -16,6 +16,7 @@ import os
 
 from utils.options import parse_args_function
 from utils.dataset import Dataset
+from utils.vis_utils import project_3D_points
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -114,7 +115,7 @@ optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_step_gamma)
 scheduler.last_epoch = start
 
-keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d']
+keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d', 'palm']
 
 """ training """
 
@@ -140,6 +141,13 @@ if args.train:
             
             # Forward
             targets = [{k: v.to(device) for k, v in t[0].items() if k in keys} for t in data_dict]
+            # cam_mat = np.array(
+            #     [[617.343,0,      312.42],
+            #     [0,       617.343,241.42],
+            #     [0,       0,       1]
+            # ])
+            # print(targets[0]['keypoints3d'].shape)
+            # print(project_3D_points(cam_mat, targets[0]['keypoints3d'][0].cpu().numpy(), is_OpenGL_coords=False))
             inputs = [t[0]['inputs'].to(device) for t in data_dict]
             loss_dict = model(inputs, targets)
 
