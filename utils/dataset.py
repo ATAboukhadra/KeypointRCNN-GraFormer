@@ -93,7 +93,8 @@ class Dataset(data.Dataset):
             'labels': labels,
             'keypoints': keypoints,
             'keypoints3d': keypoints3d,
-            'mesh3d': mesh3d
+            'mesh3d': mesh3d,
+            'palm': torch.Tensor(palm[np.newaxis, ...]).float()
         }
 
         return data

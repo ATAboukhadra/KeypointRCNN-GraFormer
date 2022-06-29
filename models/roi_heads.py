@@ -285,8 +285,8 @@ def heatmaps_to_keypoints(maps, rois):
     return xy_preds.permute(0, 2, 1), end_scores
 
 
-def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched_idxs, keypoint3d_pred=None, keypoint3d_gt=None, mesh3d_pred=None, mesh3d_gt=None):
-    # type: (Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor]) -> Tensor
+def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched_idxs, keypoint3d_pred=None, keypoint3d_gt=None, mesh3d_pred=None, mesh3d_gt=None, palm=None):
+    # type: (Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor]) -> Tensor
     N, K, H, W = keypoint_logits.shape
     assert H == W
     discretization_size = H
@@ -294,7 +294,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     valid = []
     kps3d = []
     meshes3d = []
-
+    palms = []
     if keypoint3d_pred is not None:
 
         if mesh3d_pred is None:
@@ -309,7 +309,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
                 kps3d.append(kp3d.view(-1))
             
         else:
-            for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, midx in zip(proposals, gt_keypoints, keypoint3d_gt, mesh3d_gt, keypoint_matched_idxs):
+            for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, palm, midx in zip(proposals, gt_keypoints, keypoint3d_gt, palms, mesh3d_gt, keypoint_matched_idxs):
                 kp = gt_kp_in_image[midx]
                 kp3d = gt_kp3d_in_image[midx]
                 mesh3d = gt_mesh3d_in_image[midx]
@@ -320,6 +320,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
                 valid.append(valid_per_image.view(-1))
                 kps3d.append(kp3d.view(-1))
                 meshes3d.append(mesh3d.view(-1))
+                palms.append(palm.view(-1))
         
 
     else:
