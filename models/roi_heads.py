@@ -364,23 +364,6 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
             
             mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000
         
-            # faces_idx = get_hand_object_faces(K).to('cuda:1')
-            # # print(mesh3d_pred[valid].shape)
-            # trg_mesh = Meshes(verts=[mesh3d_pred], faces=[faces_idx])
-            
-            # # src_mesh = Meshes(verts=[keypoint_targets3d[valid]], faces=[faces_idx])
-            # # We compare the two sets of pointclouds by computing (a) the chamfer loss
-            # # loss_chamfer, _ = chamfer_distance(keypoint3d_pred[valid], keypoint_targets3d[valid])
-            
-            # # and (b) the edge length of the predicted mesh
-            # loss_edge = mesh_edge_loss(trg_mesh)
-            # # mesh normal consistency
-            # loss_normal = mesh_normal_consistency(trg_mesh)
-            # # mesh laplacian smoothing
-            # loss_laplacian = mesh_laplacian_smoothing(trg_mesh, method="uniform")
-            # # Weighted sum of the losses
-            # print(loss_edge, loss_laplacian* 0.1 , loss_normal * 0.01)
-            # mesh3d_loss += 0.1 * loss_edge + loss_laplacian * 0.01  + loss_normal * 0.01
             return keypoint_loss, keypoint3d_loss, mesh3d_loss
         # Print the losses
         return keypoint_loss, keypoint3d_loss
@@ -1015,3 +998,25 @@ def get_hand_object_faces(kps=778):
     else:
         final_faces = hand_faces
     return final_faces
+
+def calculate_smoothing_loss(mesh3d, K=778):
+    
+    faces_idx = get_hand_object_faces(K).to('cuda:1')
+            
+    trg_mesh = Meshes(verts=[mesh3d], faces=[faces_idx])
+            
+    # src_mesh = Meshes(verts=[keypoint_targets3d[valid]], faces=[faces_idx])
+    # We compare the two sets of pointclouds by computing (a) the chamfer loss
+    # loss_chamfer, _ = chamfer_distance(keypoint3d_pred[valid], keypoint_targets3d[valid])
+    
+    # and (b) the edge length of the predicted mesh
+    loss_edge = mesh_edge_loss(trg_mesh)
+    # mesh normal consistency
+    loss_normal = mesh_normal_consistency(trg_mesh)
+    # mesh laplacian smoothing
+    loss_laplacian = mesh_laplacian_smoothing(trg_mesh, method="uniform")
+    # Weighted sum of the losses
+    # print(loss_edge, loss_laplacian* 0.1 , loss_normal * 0.01)
+    mesh3d_loss_smooth = 0.01 * loss_edge + loss_laplacian * 0.001  + loss_normal * 0.00001
+
+    return mesh3d_loss_smooth
