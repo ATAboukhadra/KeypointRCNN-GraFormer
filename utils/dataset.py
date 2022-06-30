@@ -43,7 +43,7 @@ class Dataset(data.Dataset):
         
         palm = self.points3d[index][0]
         point2d = self.points2d[index]
-        point3d = self.points3d[index] - palm # Center around palm
+        point3d = self.points3d[index] # Center around palm
                 
         
         # Load image and apply preprocessing if any
@@ -81,6 +81,7 @@ class Dataset(data.Dataset):
             bb, mesh2d = np.array([]), np.array([])
             boxes, labels, keypoints, keypoints3d, mesh3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
 
+        print(palm)
         data = {
             'path': image_path,
             'original_image': original_image,
@@ -94,7 +95,7 @@ class Dataset(data.Dataset):
             'keypoints': keypoints,
             'keypoints3d': keypoints3d,
             'mesh3d': mesh3d,
-            'palm': torch.Tensor(palm[np.newaxis, ...]).float()
+            # 'palm': torch.Tensor(palm[np.newaxis, ...]).float()
         }
 
         return data
