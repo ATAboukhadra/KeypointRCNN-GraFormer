@@ -22,6 +22,8 @@ from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 def collate_fn(batch):
+    # print(len(batch), type(batch[0]))
+
     return tuple(zip(batch))
 
 args = parse_args_function()
