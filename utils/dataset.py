@@ -45,7 +45,6 @@ class Dataset(data.Dataset):
         point2d = self.points2d[index]
         point3d = self.points3d[index] - palm # Center around palm
                 
-        
         # Load image and apply preprocessing if any
         if self.hdf5 is not None:
             data = np.array(self.hdf5[image_path])
@@ -81,6 +80,7 @@ class Dataset(data.Dataset):
             bb, mesh2d = np.array([]), np.array([])
             boxes, labels, keypoints, keypoints3d, mesh3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
 
+        # print(palm)
         data = {
             'path': image_path,
             'original_image': original_image,
@@ -93,7 +93,8 @@ class Dataset(data.Dataset):
             'labels': labels,
             'keypoints': keypoints,
             'keypoints3d': keypoints3d,
-            'mesh3d': mesh3d
+            'mesh3d': mesh3d,
+            'palm': torch.Tensor(palm[np.newaxis, ...]).float()
         }
 
         return data
