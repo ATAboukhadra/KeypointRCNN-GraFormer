@@ -126,5 +126,11 @@ def parse_args_function():
         help="Add feature extractor in Mask RCNN"
     )
 
+    parser.add_argument(
+        "--freeze",
+        action='store_true',
+        help="Freeze RPN after first epoch"
+    )
+
     args = parser.parse_args()
     return args

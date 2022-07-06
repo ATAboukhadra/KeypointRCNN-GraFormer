@@ -16,6 +16,7 @@ import os
 
 from utils.options import parse_args_function
 from utils.dataset import Dataset
+from utils.train_utils import freeze_component
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -84,6 +85,7 @@ model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_kps, n
                                 rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1,
                                 device=device, add_graformer=args.graformer)
 print('Keypoint RCNN is loaded')
+print(model)
 
 if use_cuda and torch.cuda.is_available():
     if args.graformer:
@@ -96,6 +98,8 @@ if use_cuda and torch.cuda.is_available():
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
+    # freeze_component(model.module.backbone)
+    # freeze_component(model.module.rpn)
 """ load saved model"""
 
 if args.pretrained_model != '':
@@ -164,7 +168,6 @@ if args.train:
             train_loss2d += loss2d.data
             running_loss3d += loss3d.data
             train_loss3d += loss3d.data
-            
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
                 if 'loss_mesh3d' in loss_dict.keys():
                     logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
@@ -206,7 +209,11 @@ if args.train:
                     val_mesh_loss3d += mesh_loss3d.data
             
             logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
-            
+        if args.freeze and epoch == 0:
+            logging.info('Freezing Backbone and RPN ..')
+            freeze_component(model.module.backbone)
+            freeze_component(model.module.rpn)
+
         # Decay Learning Rate
         scheduler.step()
     

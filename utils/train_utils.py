@@ -30,3 +30,7 @@ def create_rcnn_data(bb, point2d, point3d, num_keypoints=21):
     final_keypoints3d = torch.Tensor(point3d[:num_keypoints][np.newaxis, ...]).float()
 
     return boxes, labels, final_keypoints, final_keypoints3d
+
+def freeze_component(model):
+    for param in model.parameters():
+        param.requires_grad = False

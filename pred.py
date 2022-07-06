@@ -16,7 +16,8 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
     # init output containers
     xyz_pred_list, verts_pred_list = list(), list()
 
-    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_29_test_3d.pkl', 'rb'))
+    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
+    predictions_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
     # print(predictions_dict)
     # read list of evaluation files
     with open(os.path.join(base_path, set_name+'.txt')) as f:
@@ -43,7 +44,7 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
         aux_info = read_annotation(base_path, seq_name, file_id, set_name)
 
         # use some algorithm for prediction
-        xyz, verts = pred_func(img, aux_info, predictions_dict, rgb_path)
+        xyz, verts = pred_func(img, aux_info, predictions_dict, rgb_path, predictions_dict_mesh)
 
         # simple check if xyz and verts are in opengl coordinate system
         if np.all(xyz[:,2]>0) or np.all(verts[:,2]>0):
@@ -72,7 +73,7 @@ def dump(pred_out_path, xyz_pred_list, verts_pred_list):
     print('Dumped %d joints and %d verts predictions to %s' % (len(xyz_pred_list), len(verts_pred_list), pred_out_path))
 
 
-def pred_template(img, aux_info, predictions, path):
+def pred_template(img, aux_info, predictions, path, predictions_mesh=None):
     """ Predict joints and vertices from a given sample.
         img: (640, 480, 3) RGB image.
         aux_info: dictionary containing hand bounding box, camera matrix and root joint 3D location
@@ -84,7 +85,9 @@ def pred_template(img, aux_info, predictions, path):
     # print(path, aux_info['handJoints3D'], predictions[path].dot(coord_change_mat.T)[order_idx] / 1000)
     
     xyz = predictions[path][:21].dot(coord_change_mat.T)[order_idx] / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 21 joints
-    verts = np.zeros((778, 3)) # 3D coordinates of the shape vertices
+    verts = predictions_mesh[path][:778].dot(coord_change_mat.T) / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 778 vertices
+    # print(xyz.shape, verts.shape, xyz[0], verts[0])
+    # verts = np.zeros((778, 3)) # 3D coordinates of the shape vertices
     return xyz, verts
 
 
