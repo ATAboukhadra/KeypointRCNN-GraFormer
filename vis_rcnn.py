@@ -267,7 +267,6 @@ for i, ts_data in tqdm(enumerate(testloader)):
     # original_input = data_dict['original_image'].cpu().detach().numpy()[0]
         
     outputs = model(inputs)
-    # prof.step()
     
     img = inputs[0].cpu().detach().numpy()
     labels = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
