@@ -14,7 +14,6 @@ from GraFormer.common.loss import mpjpe
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 from manopth.manolayer import ManoLayer
 
-
 cam_mat = np.array(
     [[617.343,0,      312.42],
     [0,       617.343,241.42],
@@ -91,8 +90,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
         
         ax = fig.add_subplot(height, width, 2)
         gt_image = showHandJoints(gt_image, keypoints[:21])
-        # if keypoints.shape[0] > 21:
-        #     gt_image = showObjJoints(gt_image, keypoints[21:])
+        if keypoints.shape[0] > 21:
+            gt_image = showObjJoints(gt_image, keypoints[21:])
         
         ax.imshow(gt_image)
         ax.title.set_text('GT keypoints')
@@ -128,8 +127,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
 
     ax = fig.add_subplot(height, width, 6)     
     pred_image = showHandJoints(pred_image, keypoints2d[:21], filename=filename)
-    # if keypoints2d.shape[0] > 21:
-    #     pred_image = showObjJoints(pred_image, keypoints2d[21:], filename=filename)
+    if keypoints2d.shape[0] > 21:
+        pred_image = showObjJoints(pred_image, keypoints2d[21:], filename=filename)
     ax.imshow(pred_image)
     ax.title.set_text('Predicted keypoints')
 
@@ -152,8 +151,16 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
         predicted_keypoints3d += palm
 
     plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
+    final_obj = filename.replace('.jpg', '').replace('.png', '')
+    
     if num_keypoints > 778:
-        plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
+        print(final_obj)
+        plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")        
+        final_faces = np.concatenate((handFaces, objFaces + 778), axis = 0)
+        write_obj(predicted_keypoints3d, final_faces, final_obj)
+    else:
+        write_obj(predicted_keypoints3d, handFaces, final_obj)
+    
     cam_equal_aspect_3d(ax, predicted_keypoints3d[:num_keypoints], flip_x=False)
     ax.title.set_text('Predicted Mesh')
 
@@ -204,7 +211,7 @@ if args.generate_mesh:
 else:
     init_num_keypoints = num_keypoints
 testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, num_keypoints=num_keypoints)
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=16, collate_fn=collate_fn)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
 print(len(testloader.dataset))
 print('Data loaded!')
 
@@ -236,11 +243,15 @@ minLoss = 100000
 criterion = nn.MSELoss()
 keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d', 'palm']
 c = 0
+
+
+supporting_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
+supporting_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
+
 output_dict = {}
 output_dict_mesh = {}
-errors = []
 
-# for i, ts_data in tqdm(enumerate(testloader)):
+errors = []
 
 for i, ts_data in tqdm(enumerate(testloader)):
         
@@ -254,9 +265,10 @@ for i, ts_data in tqdm(enumerate(testloader)):
     # print(targets)
     inputs = [t[0]['inputs'].to(device) for t in data_dict]
     # original_input = data_dict['original_image'].cpu().detach().numpy()[0]
-    
+        
     outputs = model(inputs)
-
+    # prof.step()
+    
     img = inputs[0].cpu().detach().numpy()
     labels = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
     predictions = {k: v.cpu().detach().numpy() for k, v in outputs[0].items()}
@@ -264,7 +276,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
     # predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
 
     path = data_dict[0][0]['path']
-    print(path)
+    # print(path)
     name = path.split('/')[-1]
 
     palm = labels['palm'][0]
@@ -304,13 +316,18 @@ for i, ts_data in tqdm(enumerate(testloader)):
 
     else:
         c += 1
-        keypoints = np.zeros((num_keypoints, args.dimension))
-        mesh = np.zeros((num_keypoints, args.dimension))
+        if supporting_dict is not None:
+            keypoints = supporting_dict[path]
+            mesh = supporting_dict_mesh[path]
+        else:
+            keypoints = np.zeros((num_keypoints, args.dimension))
+            mesh = np.zeros((num_keypoints, args.dimension))
         print(c)
       
     output_dict[path] = keypoints
     output_dict_mesh[path] = mesh
     # break
+# prof.stop()
 
 if args.split != 'test':
     avg_error = np.average(np.array(errors))
@@ -319,9 +336,9 @@ if args.split != 'test':
 output_dict = dict(sorted(output_dict.items()))
 print('Total number of predictions:', len(output_dict.keys()))
 
-with open(f'./rcnn_outputs/rcnn_outputs_{num_keypoints}_{args.split}_3d.pkl', 'wb') as f:
+with open(f'./rcnn_outputs/rcnn_outputs_{num_keypoints}_{args.split}_3d_v2.pkl', 'wb') as f:
     pickle.dump(output_dict, f)
 
 output_dict_mesh = dict(sorted(output_dict_mesh.items()))
-with open(f'./rcnn_outputs_mesh/rcnn_outputs_{num_keypoints}_{args.split}_3d.pkl', 'wb') as f:
+with open(f'./rcnn_outputs_mesh/rcnn_outputs_{num_keypoints}_{args.split}_3d_v2.pkl', 'wb') as f:
     pickle.dump(output_dict_mesh, f)

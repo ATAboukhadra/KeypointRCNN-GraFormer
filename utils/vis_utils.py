@@ -9,7 +9,7 @@ import math
 import sys
 import matplotlib.pyplot as plt
 import cv2
-
+import pymeshlab
 """ General util functions. """
 def _assert_exist(p):
     msg = 'File does not exists: %s' % p
@@ -603,3 +603,8 @@ def read_annotation(base_dir, seq_name, file_id, split):
     return pkl_data
 
 
+def write_obj(verts, faces, filename):
+    m = pymeshlab.Mesh(verts, faces)
+    ms = pymeshlab.MeshSet()
+    ms.add_mesh(m, f'{filename}')
+    ms.save_current_mesh(f'{filename}.obj', save_vertex_normal=True, save_face_color=True, save_polygonal=True)

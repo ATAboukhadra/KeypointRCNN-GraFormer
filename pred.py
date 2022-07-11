@@ -16,8 +16,8 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
     # init output containers
     xyz_pred_list, verts_pred_list = list(), list()
 
-    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
-    predictions_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
+    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d_v2.pkl', 'rb'))
+    predictions_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d_v2.pkl', 'rb'))
     # print(predictions_dict)
     # read list of evaluation files
     with open(os.path.join(base_path, set_name+'.txt')) as f:
@@ -84,6 +84,8 @@ def pred_template(img, aux_info, predictions, path, predictions_mesh=None):
     
     # print(path, aux_info['handJoints3D'], predictions[path].dot(coord_change_mat.T)[order_idx] / 1000)
     
+    # path = path.replace('v2', 'v3').replace('.png', '.jpg')
+
     xyz = predictions[path][:21].dot(coord_change_mat.T)[order_idx] / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 21 joints
     verts = predictions_mesh[path][:778].dot(coord_change_mat.T) / 1000 + aux_info['handJoints3D'] # 3D coordinates of the 778 vertices
     # print(xyz.shape, verts.shape, xyz[0], verts[0])
@@ -93,7 +95,7 @@ def pred_template(img, aux_info, predictions, path, predictions_mesh=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Show some samples from the dataset.')
-    parser.add_argument('--base_path', type=str, default='/home2/HO3D_v3', help='Path to where the HO3D dataset is located.')
+    parser.add_argument('--base_path', type=str, default='/home2/HO3D_v2', help='Path to where the HO3D dataset is located.')
     parser.add_argument('--out', type=str, default='pred.json', help='File to save the predictions.')
     parser.add_argument('--version', type=str, choices=['v2', 'v3'], help='version number')
     args = parser.parse_args()
