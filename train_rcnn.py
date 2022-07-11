@@ -82,7 +82,9 @@ else:
     init_num_kps = num_keypoints
 
 model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                # rpn_positive_fraction=1, 
+                                rpn_batch_size_per_image=1,
                                 device=device, add_graformer=args.graformer)
 print('Keypoint RCNN is loaded')
 print(model)

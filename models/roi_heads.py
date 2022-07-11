@@ -357,6 +357,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         
         if mesh3d_pred is not None:
             N, K, D = mesh3d_pred.shape
+            print(N)
             # print(mesh3d_pred.shape)
             mesh_targets3d = torch.cat(meshes3d, dim=0)
             mesh3d_pred = torch.reshape(mesh3d_pred, (N * K, D))
@@ -914,7 +915,7 @@ class RoIHeads(nn.Module):
             
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
-            # print(batch)
+            print(batch)
             # Heatmap refinement using GraFormer
             if self.keypoint_graformer is not None:
                 keypoint3d = torch.zeros((21, 3))
