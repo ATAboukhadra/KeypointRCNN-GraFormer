@@ -347,7 +347,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
             mesh_targets3d = torch.reshape(mesh_targets3d, (N * K, D))
             
             mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000
-        
+            
             # mesh3d_loss_smooth = calculate_smoothing_loss(mesh3d_pred[:K], K)
             # if N > 1:
             #     mesh3d_loss_smooth += calculate_smoothing_loss(mesh3d_pred[K:K*2], K)
@@ -986,3 +986,25 @@ def calculate_smoothing_loss(mesh3d, K=778):
     mesh3d_loss_smooth = 0. * loss_edge + loss_laplacian * 0.0  + loss_normal * 0.000001
 
     return mesh3d_loss_smooth
+
+def project_3D_points(cam_mat, pts3D, is_OpenGL_coords=True):
+    '''
+    Function for projecting 3d points to 2d
+    :param camMat: camera matrix
+    :param pts3D: 3D points
+    :param isOpenGLCoords: If True, hand/object along negative z-axis. If False hand/object along positive z-axis
+    :return:
+    '''
+    assert pts3D.shape[-1] == 3
+    assert len(pts3D.shape) == 2
+
+    # coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
+    # if is_OpenGL_coords:
+    #     pts3D = pts3D.dot(coord_change_mat.T)
+
+    proj_pts = pts3D.dot(cam_mat.T)
+    proj_pts = np.stack([proj_pts[:,0]/proj_pts[:,2], proj_pts[:,1]/proj_pts[:,2]],axis=1)
+
+    assert len(proj_pts.shape) == 2
+
+    return proj_pts
