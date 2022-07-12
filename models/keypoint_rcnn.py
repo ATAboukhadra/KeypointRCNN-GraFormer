@@ -171,7 +171,7 @@ class KeypointRCNN(FasterRCNN):
                  bbox_reg_weights=None,
                  # keypoint parameters
                  keypoint_roi_pool=None, keypoint_head=None, keypoint_predictor=None,
-                 init_num_kps=21, num_keypoints=21, device='cpu', add_graformer=False):
+                 init_num_kps=21, num_keypoints=21, device='cpu'):
 
         assert isinstance(keypoint_roi_pool, (MultiScaleRoIAlign, type(None)))
         if min_size is None:

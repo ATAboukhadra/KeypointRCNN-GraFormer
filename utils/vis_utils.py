@@ -451,6 +451,15 @@ def load_faces():
 
     return hand_faces, obj_faces
 
+def save_mesh(labels, idx, num_keypoints, filename, hand_faces, obj_faces):
+    predicted_keypoints3d = labels['mesh3d'][idx]
+    final_obj = filename.replace('.jpg', '').replace('.png', '')
+    if num_keypoints > 778:
+        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
+        write_obj(predicted_keypoints3d, final_faces, final_obj)
+    else:
+        write_obj(predicted_keypoints3d, hand_faces, final_obj)
+
 
 class Minimal(object):
     def __init__(self, **kwargs):

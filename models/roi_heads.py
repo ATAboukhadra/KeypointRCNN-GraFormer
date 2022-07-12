@@ -6,7 +6,7 @@ from torchvision.ops import boxes as box_ops
 from torchvision.models.detection import _utils as det_utils
 
 from typing import Optional, List, Dict, Tuple
-from rcnn_utils import fastrcnn_loss, maskrcnn_loss, maskrcnn_inference, keypointrcnn_loss, keypointrcnn_inference
+from .rcnn_utils import fastrcnn_loss, maskrcnn_loss, maskrcnn_inference, keypointrcnn_loss, keypointrcnn_inference
  
 class RoIHeads(nn.Module):
     __annotations__ = {

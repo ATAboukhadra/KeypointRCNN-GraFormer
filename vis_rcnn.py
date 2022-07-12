@@ -12,15 +12,13 @@ from utils.vis_utils import *
 from tqdm import tqdm
 from GraFormer.common.loss import mpjpe
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
-
+from utils.train_utils import calculate_keypoints
 
 def collate_fn(batch):
     return tuple(zip(batch))
 
 def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, palm=None):
     
-    # print(n)
-    # img = img.astype(np.uint8)
     fig = plt.figure(figsize=(25, 15))
     H = 2
     W = 4
@@ -31,10 +29,10 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
 
     # Plot GT bounding boxes
     if labels is not None:
-        plot_bb_ax(img, 0, labels, fig_config, 1, 'GT BB')
+        plot_bb_ax(img, labels, fig_config, 1, 'GT BB')
 
         # Plot GT 2D keypoints
-        plot_pose2d(img, 0, labels, fig_config, 2, 'GT 2D pose')
+        plot_pose2d(img, labels, 0, palm, fig_config, 2, 'GT 2D pose')
 
         # Plot GT 3D Keypoints
         plot_pose3d(labels, 0, palm, num_keypoints, fig_config, 3, 'GT 3D pose')
@@ -43,10 +41,10 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
         plot_mesh3d(labels, 0, palm, num_keypoints, hand_faces, obj_faces, fig_config, 4, 'GT 3D mesh')
 
     # Plot predicted bounding boxes
-    plot_bb_ax(img, predictions, idx, fig_config, 5, 'Predicted BB')
+    plot_bb_ax(img, predictions, fig_config, 5, 'Predicted BB')
     
     # Plot predicted 2D keypoints
-    plot_pose2d(img, predictions, idx, fig_config, 6, 'Predicted 2D pose')
+    plot_pose2d(img, predictions, idx, palm, fig_config, 6, 'Predicted 2D pose')
 
     # Plot predicted 3D keypoints
     plot_pose3d(predictions, idx, palm, num_keypoints, fig_config, 7, 'Predicted 3D pose')
@@ -55,13 +53,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     plot_mesh3d(predictions, idx, palm, num_keypoints, hand_faces, obj_faces, fig_config, 8, 'Predicted 3D mesh')
     
     # Save Mesh
-    predicted_keypoints3d = predictions['mesh3d'][idx]
-    if num_keypoints > 778:
-        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
-        write_obj(predicted_keypoints3d, final_faces, final_obj)
-    else:
-        write_obj(predicted_keypoints3d, hand_faces, final_obj)
-
+    save_mesh(predictions, idx, num_keypoints, filename, hand_faces, obj_faces)
+    
     fig.tight_layout()
     # plt.subplots_adjust(wspace=0.2, hspace=0.3)
     plt.show()
@@ -94,20 +87,8 @@ args = parser.parse_args()
 # Transformer function
 transform_function = transforms.Compose([transforms.ToTensor()])
 
-if args.object:
-    num_keypoints = 29
-else:
-    num_keypoints = 21
-    
-if args.generate_mesh:
-    if args.object:
-        init_num_keypoints = 29
-        num_keypoints = 1778
-    else:
-        init_num_keypoints = 21
-        num_keypoints = 778
-else:
-    init_num_keypoints = num_keypoints
+init_num_keypoints, num_keypoints = calculate_keypoints(args.object, args.generate_mesh)
+
 testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, num_keypoints=num_keypoints)
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
 print(len(testloader.dataset))
@@ -121,12 +102,12 @@ if args.gpu:
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
 model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_keypoints, num_keypoints=num_keypoints, num_classes=2, device=device,
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, add_graformer=args.graformer, rpn_batch_size_per_image=1)
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, rpn_batch_size_per_image=1)
 
-if args.gpu and torch.cuda.is_available():
-    if args.graformer:
-        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-        # model.roi_heads.keypoint_graformer2d.mask = model.roi_heads.keypoint_graformer2d.mask.cuda(args.gpu_number[0])
+if torch.cuda.is_available():
+    model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
+    model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
+    model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]  
 
     model = model.cuda(device=args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
@@ -141,7 +122,6 @@ minLoss = 100000
 criterion = nn.MSELoss()
 keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d', 'palm']
 c = 0
-
 
 supporting_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
 supporting_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
