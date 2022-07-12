@@ -285,8 +285,9 @@ def heatmaps_to_keypoints(maps, rois):
     return xy_preds.permute(0, 2, 1), end_scores
 
 
-def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched_idxs, keypoint3d_pred=None, keypoint3d_gt=None, mesh3d_pred=None, mesh3d_gt=None, palms_gt=None):
-    # type: (Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor]) -> Tensor
+def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched_idxs,
+                     keypoint3d_pred=None, keypoint3d_gt=None, mesh3d_pred=None, mesh3d_gt=None, palms_gt=None, original_images=None):
+    # type: (Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor]) -> Tensor
     N, K, H, W = keypoint_logits.shape
     assert H == W
     discretization_size = H
@@ -295,21 +296,27 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     kps3d = []
     meshes3d = []
     palms = []
-    for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, palm_in_image, midx in zip(proposals, gt_keypoints, keypoint3d_gt, mesh3d_gt, palms_gt, keypoint_matched_idxs):
+    images = []
+    # print(len(gt_keypoints))
+    zipped = zip(proposals, gt_keypoints, keypoint3d_gt, mesh3d_gt, palms_gt, original_images, keypoint_matched_idxs)
+    for index, (proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, palm_in_image, image, midx) in enumerate(zipped):
 
         kp = gt_kp_in_image[midx]
         kp3d = gt_kp3d_in_image[midx]
         mesh3d = gt_mesh3d_in_image[midx]
         palm = palm_in_image[midx]
-
+        num_regions = midx.shape[0]
+        # image = original_imag
         heatmaps_per_image, valid_per_image = keypoints_to_heatmap(kp, proposals_per_image, discretization_size)
+        
         heatmaps.append(heatmaps_per_image.view(-1))
         valid.append(valid_per_image.view(-1))
         kps3d.append(kp3d.view(-1))
         meshes3d.append(mesh3d.view(-1))
         # print(palm.view(-1).shape)
         palms.append(palm.view(-1))
-    
+        images.extend([image] * num_regions)
+        
     # print(len(palms))
 
     keypoint_targets = torch.cat(heatmaps, dim=0)
@@ -338,24 +345,28 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
         keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid] , keypoint_targets3d[valid]) / 1000
 
-        if mesh3d_pred is not None:
-            N, K, D = mesh3d_pred.shape
-            mesh_targets3d = torch.cat(meshes3d, dim=0)
-            
-            # mesh3d_pred += palms
-            mesh3d_pred = torch.reshape(mesh3d_pred, (N * K, D))
-            mesh_targets3d = torch.reshape(mesh_targets3d, (N * K, D))
-            
-            mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000
-            
-            # mesh3d_loss_smooth = calculate_smoothing_loss(mesh3d_pred[:K], K)
-            # if N > 1:
-            #     mesh3d_loss_smooth += calculate_smoothing_loss(mesh3d_pred[K:K*2], K)
-            # mesh3d_loss += mesh3d_loss_smooth
+        N, K, D = mesh3d_pred[:, :, :3].shape
+        mesh_targets3d = torch.cat(meshes3d, dim=0)
+        
+        # mesh3d_pred += palms
+        xyz_rgb_pred = mesh3d_pred
+        mesh3d_pred = torch.reshape(mesh3d_pred[:, :, :3], (N * K, D))
+        mesh_targets3d = torch.reshape(mesh_targets3d, (N * K, D))
+        
+        # print(project_3D_points(mesh3d_pred).shape)
+        # print([img.shape for img in original_images])
+        images = torch.stack(images)
+        photometric_loss = calculate_photometric_loss(xyz_rgb_pred, images, palms, N, K)
+        mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000 
+        # print(photometric_loss, mesh3d_loss)
+        mesh3d_loss += photometric_loss
+        
+        # mesh3d_loss_smooth = calculate_smoothing_loss(mesh3d_pred[:K], K)
+        # if N > 1:
+        #     mesh3d_loss_smooth += calculate_smoothing_loss(mesh3d_pred[K:K*2], K)
+        # mesh3d_loss += mesh3d_loss_smooth
 
-            return keypoint_loss, keypoint3d_loss, mesh3d_loss
-        # Print the losses
-        return keypoint_loss, keypoint3d_loss
+        return keypoint_loss, keypoint3d_loss, mesh3d_loss
     else:
         return keypoint_loss
 
@@ -775,6 +786,7 @@ class RoIHeads(nn.Module):
                 features,      # type: Dict[str, Tensor]
                 proposals,     # type: List[Tensor]
                 image_shapes,  # type: List[Tuple[int, int]]
+                original_imgs, # type: List[Tensor]
                 targets=None   # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
@@ -919,11 +931,10 @@ class RoIHeads(nn.Module):
                 gt_keypoints = [t["keypoints"] for t in targets]
                 keypoints3d_gt = [t["keypoints3d"] for t in targets]
                 mesh3d_gt = [t["mesh3d"] for t in targets]
-                
                 # Shift back using palms
                 palms_gt = [t["palm"] for t in targets]
                 rcnn_loss_keypoint, rcnn_loss_keypoint3d, rcnn_loss_mesh3d = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, 
-                                                                        keypoint3d, keypoints3d_gt, mesh3d, mesh3d_gt, palms_gt=palms_gt)
+                                                                        keypoint3d, keypoints3d_gt, mesh3d, mesh3d_gt, palms_gt=palms_gt, original_images=original_imgs)
                 
                 loss_keypoint = {
                     "loss_keypoint": rcnn_loss_keypoint,
@@ -987,24 +998,35 @@ def calculate_smoothing_loss(mesh3d, K=778):
 
     return mesh3d_loss_smooth
 
-def project_3D_points(cam_mat, pts3D, is_OpenGL_coords=True):
-    '''
-    Function for projecting 3d points to 2d
-    :param camMat: camera matrix
-    :param pts3D: 3D points
-    :param isOpenGLCoords: If True, hand/object along negative z-axis. If False hand/object along positive z-axis
-    :return:
-    '''
-    assert pts3D.shape[-1] == 3
-    assert len(pts3D.shape) == 2
+def project_3D_points(pts3D):
 
-    # coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
-    # if is_OpenGL_coords:
-    #     pts3D = pts3D.dot(coord_change_mat.T)
+    cam_mat = torch.Tensor(
+        [[617.343,0,      312.42],
+        [0,       617.343,241.42],
+        [0,       0,       1]]).to(pts3D.device)
 
-    proj_pts = pts3D.dot(cam_mat.T)
-    proj_pts = np.stack([proj_pts[:,0]/proj_pts[:,2], proj_pts[:,1]/proj_pts[:,2]],axis=1)
-
-    assert len(proj_pts.shape) == 2
-
+    proj_pts = pts3D.matmul(cam_mat.T)
+    proj_pts = torch.stack([proj_pts[:,0] / proj_pts[:,2], proj_pts[:,1] / proj_pts[:,2]], axis=1)
+    proj_pts = proj_pts.to(torch.long)
     return proj_pts
+
+def calculate_photometric_loss(xyz_rgb, images, centers, N, K):
+
+    pts3D = xyz_rgb[:, :, :3] + centers
+    pts3D = pts3D.reshape((N * K, 3))
+
+    pts2D = project_3D_points(pts3D)
+    pts2D = pts2D.view(N, K, 2)
+    B, W, H, _ = images.shape
+
+    idx_x = pts2D[:, :, 0].clamp(min=0, max=W-1)
+    idx_y = pts2D[:, :, 1].clamp(min=0, max=H-1)
+    
+    # torch.gather(images, 1, )
+    pixels = images[torch.arange(B).unsqueeze(1), idx_x, idx_y]
+    # print(pixels.shape)
+    pred_rgb = xyz_rgb[:, :, 3:]
+
+    photometric_loss = F.mse_loss(pred_rgb, pixels)
+
+    return photometric_loss

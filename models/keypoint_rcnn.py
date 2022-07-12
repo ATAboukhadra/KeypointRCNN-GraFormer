@@ -213,7 +213,7 @@ class KeypointRCNN(FasterRCNN):
                 
                 feature_extractor = TwoMLPHead(256 * 14 * 14, 1024)
                 input_size += 1024
-                mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 3), n_pts=num_keypoints, dropout=0.25, device=device)
+                mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 6), n_pts=num_keypoints, dropout=0.25, device=device)
             else:
                 edges = create_edges(num_nodes=num_keypoints)
                 adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)

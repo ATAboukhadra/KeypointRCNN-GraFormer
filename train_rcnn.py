@@ -16,14 +16,12 @@ import os
 
 from utils.options import parse_args_function
 from utils.dataset import Dataset
-from utils.vis_utils import project_3D_points
+# from utils.train_utils import freeze_component
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 def collate_fn(batch):
-    # print(len(batch), type(batch[0]))
-
     return tuple(zip(batch))
 
 args = parse_args_function()
@@ -84,9 +82,12 @@ else:
     init_num_kps = num_keypoints
 
 model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                # rpn_positive_fraction=1, 
+                                # rpn_batch_size_per_image=1,
                                 device=device, add_graformer=args.graformer)
 print('Keypoint RCNN is loaded')
+print(model)
 
 if use_cuda and torch.cuda.is_available():
     if args.graformer:
@@ -99,6 +100,8 @@ if use_cuda and torch.cuda.is_available():
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
+    # freeze_component(model.module.backbone)
+    # freeze_component(model.module.rpn)
 """ load saved model"""
 
 if args.pretrained_model != '':
@@ -143,13 +146,6 @@ if args.train:
             
             # Forward
             targets = [{k: v.to(device) for k, v in t[0].items() if k in keys} for t in data_dict]
-            # cam_mat = np.array(
-            #     [[617.343,0,      312.42],
-            #     [0,       617.343,241.42],
-            #     [0,       0,       1]
-            # ])
-            # print(targets[0]['keypoints3d'].shape)
-            # print(project_3D_points(cam_mat, targets[0]['keypoints3d'][0].cpu().numpy(), is_OpenGL_coords=False))
             inputs = [t[0]['inputs'].to(device) for t in data_dict]
             loss_dict = model(inputs, targets)
 
@@ -174,7 +170,6 @@ if args.train:
             train_loss2d += loss2d.data
             running_loss3d += loss3d.data
             train_loss3d += loss3d.data
-            
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
                 if 'loss_mesh3d' in loss_dict.keys():
                     logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
@@ -216,7 +211,11 @@ if args.train:
                     val_mesh_loss3d += mesh_loss3d.data
             
             logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
-            
+        # if args.freeze and epoch == 0:
+        #     logging.info('Freezing Backbone and RPN ..')
+            # freeze_component(model.module.backbone)
+            # freeze_component(model.module.rpn)
+
         # Decay Learning Rate
         scheduler.step()
     
