@@ -12,157 +12,55 @@ from utils.vis_utils import *
 from tqdm import tqdm
 from GraFormer.common.loss import mpjpe
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
-from manopth.manolayer import ManoLayer
-
-cam_mat = np.array(
-    [[617.343,0,      312.42],
-    [0,       617.343,241.42],
-    [0,       0,       1]
- ])
-
-mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, ncomps=6, flat_hand_mean=True)
-handFaces = mano_layer.th_faces
-print("Mano layer faces loaded!")
-
-# Loading object faces
-obj_mesh = read_obj('../HOPE/datasets/spheres/sphere_1000.obj')
-objFaces = obj_mesh.f
 
 
 def collate_fn(batch):
     return tuple(zip(batch))
-
-def draw_confidence(image, keypoints, scores):
-    keypoints = np.round(keypoints).astype(np.int)
-
-    high_confidence = np.where(scores >= 2)[0]
-    low_confidence = np.where(scores < 2)[0]
-    # print(high_confidence)
-    
-    for idx in high_confidence:
-        cv2.circle(image, center=(keypoints[idx][0], keypoints[idx][1]), radius=3, color=[43, 140, 237], thickness=-1)
-    for idx in low_confidence:
-        cv2.circle(image, center=(keypoints[idx][0], keypoints[idx][1]), radius=3, color=[0, 0, 0], thickness=-1)
-    
-    return image
 
 def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, palm=None):
     
     # print(n)
     # img = img.astype(np.uint8)
     fig = plt.figure(figsize=(25, 15))
+    H = 2
+    W = 4
 
-    width = 4
-    height = 2
-    i = 1
+    fig_config = (fig, H, W)
     idx = list(predictions['labels']).index(1) #[0]
-    
-    predicted_keypoints3d = predictions['keypoints3d'][idx] 
-    # if palm is not None:
-    #     predicted_keypoints3d += palm
-        
-    projected_keypoints2d = project_3D_points(cam_mat, predicted_keypoints3d + palm, is_OpenGL_coords=False)
+    hand_faces, obj_faces = load_faces()
 
     # Plot GT bounding boxes
-    bb_image = np.copy(img)
     if labels is not None:
-        ax = fig.add_subplot(height, width, 1)
-        ax.title.set_text('GT BB')
-        bb = labels['boxes'][0]
-        bb_image = draw_bb(bb_image, bb, [229, 255, 204])
-        ax.imshow(bb_image)
+        plot_bb_ax(img, 0, labels, fig_config, 1, 'GT BB')
 
-    # Plot predicted bounding boxes
-    ax = fig.add_subplot(height, width, 5)
-    ax.title.set_text('Predicted BB')
-
-    bb_image = np.copy(img)
-    # draw_confidence(bb_image, predictions['keypoints'][hand_idx], predictions['keypoints_scores'][hand_idx])
-    for bb in predictions['boxes']:
-        bb_image = draw_bb(bb_image, bb, [229, 255, 204])
-    ax.imshow(bb_image)
-
-    # Plot GT 2D keypoints
-    gt_image = np.copy(img)
-    if labels is not None:
-        keypoints = labels['keypoints'][0]
-        # keypoints = projected_keypoints2d
-        
-        ax = fig.add_subplot(height, width, 2)
-        gt_image = showHandJoints(gt_image, keypoints[:21])
-        if keypoints.shape[0] > 21:
-            gt_image = showObjJoints(gt_image, keypoints[21:])
-        
-        ax.imshow(gt_image)
-        ax.title.set_text('GT keypoints')
+        # Plot GT 2D keypoints
+        plot_pose2d(img, 0, labels, fig_config, 2, 'GT 2D pose')
 
         # Plot GT 3D Keypoints
-        keypoints3d = labels['keypoints3d'][0]
-        if palm is not None:
-            keypoints3d += palm
-    
-        ax = fig.add_subplot(height, width, 3, projection="3d")
-        show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
-        if num_keypoints > 778:
-            show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
-        
-        ax.title.set_text('GT 3D pose')
+        plot_pose3d(labels, 0, palm, num_keypoints, fig_config, 3, 'GT 3D pose')
 
         # Plot GT 3D mesh
-        ax = fig.add_subplot(height, width, 4, projection="3d")
-        keypoints3d = labels['mesh3d'][0]
-        if palm is not None:
-            keypoints3d += palm
-        plot3dVisualize(ax, keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
-        if num_keypoints > 778:
-            plot3dVisualize(ax, keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
-        cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
-        ax.title.set_text('Original Mesh')
-    
-        
-    # Plot predicted 2D keypoints
-    pred_image = np.copy(img)
-    # keypoints2d = predictions['keypoints'][idx]
-    keypoints2d = projected_keypoints2d
+        plot_mesh3d(labels, 0, palm, num_keypoints, hand_faces, obj_faces, fig_config, 4, 'GT 3D mesh')
 
-    ax = fig.add_subplot(height, width, 6)     
-    pred_image = showHandJoints(pred_image, keypoints2d[:21], filename=filename)
-    if keypoints2d.shape[0] > 21:
-        pred_image = showObjJoints(pred_image, keypoints2d[21:], filename=filename)
-    ax.imshow(pred_image)
-    ax.title.set_text('Predicted keypoints')
+    # Plot predicted bounding boxes
+    plot_bb_ax(img, predictions, idx, fig_config, 5, 'Predicted BB')
+    
+    # Plot predicted 2D keypoints
+    plot_pose2d(img, predictions, idx, fig_config, 6, 'Predicted 2D pose')
 
     # Plot predicted 3D keypoints
-    predicted_keypoints3d = predictions['keypoints3d'][idx]
-    if palm is not None:
-        predicted_keypoints3d += palm
-
-    ax = fig.add_subplot(height, width, 7, projection="3d")
-    show3DHandJoints(ax, predicted_keypoints3d[:21], isOpenGLCoords=True)
-    if num_keypoints > 778:
-        show3DObjCorners(ax, predicted_keypoints3d[21:], isOpenGLCoords=True)
-    
-    ax.title.set_text('Pred 3D pose')
+    plot_pose3d(predictions, idx, palm, num_keypoints, fig_config, 7, 'Predicted 3D pose')
 
     # Plot predicted 3D Mesh
-    ax = fig.add_subplot(height, width, 8, projection="3d")
-    predicted_keypoints3d = predictions['mesh3d'][idx]
-    if palm is not None:
-        predicted_keypoints3d += palm
-
-    plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
-    final_obj = filename.replace('.jpg', '').replace('.png', '')
+    plot_mesh3d(predictions, idx, palm, num_keypoints, hand_faces, obj_faces, fig_config, 8, 'Predicted 3D mesh')
     
+    # Save Mesh
+    predicted_keypoints3d = predictions['mesh3d'][idx]
     if num_keypoints > 778:
-        print(final_obj)
-        plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")        
-        final_faces = np.concatenate((handFaces, objFaces + 778), axis = 0)
+        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
         write_obj(predicted_keypoints3d, final_faces, final_obj)
     else:
-        write_obj(predicted_keypoints3d, handFaces, final_obj)
-    
-    cam_equal_aspect_3d(ax, predicted_keypoints3d[:num_keypoints], flip_x=False)
-    ax.title.set_text('Predicted Mesh')
+        write_obj(predicted_keypoints3d, hand_faces, final_obj)
 
     fig.tight_layout()
     # plt.subplots_adjust(wspace=0.2, hspace=0.3)

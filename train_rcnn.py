@@ -16,7 +16,7 @@ import os
 
 from utils.options import parse_args_function
 from utils.dataset import Dataset
-from utils.train_utils import freeze_component
+from utils.train_utils import freeze_component, calculate_keypoints
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -29,23 +29,12 @@ root = args.input_file
 
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
-# device = 'cpu'
 
 use_cuda = False
 if args.gpu:
     use_cuda = True
 
-if args.object:
-    num_keypoints = 29
-else:
-    num_keypoints = 21
-    
-if args.generate_mesh:
-    if args.object:
-        num_keypoints = 1778
-    else:
-        num_keypoints = 778
-
+init_num_kps, num_keypoints = calculate_keypoints(args.object, args.generate_mesh)
 
 """ Configure a log """
 
@@ -76,27 +65,16 @@ if args.val:
 
 """ load model """
 
-if num_keypoints > 29:
-    init_num_kps = 21 if num_keypoints == 778 else 29
-else:
-    init_num_kps = num_keypoints
-
-model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
-                                # rpn_positive_fraction=1, 
-                                rpn_batch_size_per_image=1,
-                                device=device, add_graformer=args.graformer)
+model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
+                                # rpn_batch_size_per_image=1,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, device=device)
 print('Keypoint RCNN is loaded')
 print(model)
 
-if use_cuda and torch.cuda.is_available():
-    if args.graformer:
-        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-        if num_keypoints > 29:
-            model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
-            model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]
-            
-    
+if 'cuda' in device:
+    model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
+    model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
+    model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]  
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
@@ -159,27 +137,23 @@ if args.train:
             # print statistics
             loss2d = loss_dict['loss_keypoint']
             loss3d = loss_dict['loss_keypoint3d']
-            
-            if 'loss_mesh3d' in loss_dict.keys():
-                mesh_loss3d = loss_dict['loss_mesh3d']
-                running_mesh_loss3d += mesh_loss3d.data
-                train_mesh_loss3d += mesh_loss3d.data
-                
-            # print(loss_dict['loss_keypoint3d'])
+            mesh_loss3d = loss_dict['loss_mesh3d']
+    
             running_loss2d += loss2d.data
             train_loss2d += loss2d.data
             running_loss3d += loss3d.data
             train_loss3d += loss3d.data
+            running_mesh_loss3d += mesh_loss3d.data
+            train_mesh_loss3d += mesh_loss3d.data
+            
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
-                if 'loss_mesh3d' in loss_dict.keys():
-                    logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
-                    (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch, running_mesh_loss3d / args.log_batch))
-                    running_mesh_loss3d = 0.0
-                else:
-
-                    logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f' % (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch))
+                logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
+                (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch, running_mesh_loss3d / args.log_batch))
+                
+                running_mesh_loss3d = 0.0
                 running_loss2d = 0.0
                 running_loss3d = 0.0
+        
         losses.append((train_loss2d / (i+1)).cpu().numpy())
         
         if (epoch+1) % args.snapshot_epoch == 0:
@@ -202,13 +176,11 @@ if args.train:
                 # loss = sum(loss for loss in loss_dict.values())
                 loss2d = loss_dict['loss_keypoint']
                 loss3d = loss_dict['loss_keypoint3d']
-
+                mesh_loss3d = loss_dict['loss_mesh3d']
+                
                 val_loss2d += loss2d.data
                 val_loss3d += loss3d.data
-            
-                if 'loss_mesh3d' in loss_dict.keys():
-                    mesh_loss3d = loss_dict['loss_mesh3d']
-                    val_mesh_loss3d += mesh_loss3d.data
+                val_mesh_loss3d += mesh_loss3d.data
             
             logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
         if args.freeze and epoch == 0:

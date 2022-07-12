@@ -197,27 +197,16 @@ class KeypointRCNN(FasterRCNN):
             keypoint_dim_reduced = 512  # == keypoint_layers[-1]
             keypoint_predictor = KeypointRCNNPredictor(keypoint_dim_reduced, init_num_kps)
 
-        if add_graformer:
-            print("==> Creating model...")
-
-            input_size = 3136
-            # GraFormer            
-            if num_keypoints > 29: #i.e. mesh
-                # Feature Extractor
-                # pooling = nn.AdaptiveAvgPool2d((10, 14))
-                
-                edges = create_edges(num_nodes=init_num_kps)
-                adj = adj_mx_from_edges(num_pts=init_num_kps, edges=edges, sparse=False)            
-                keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), 
-                                                n_pts=init_num_kps, num_layers=5, n_head=4, dropout=0.25)
-                
-                feature_extractor = TwoMLPHead(256 * 14 * 14, 1024)
-                input_size += 1024
-                mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 3), n_pts=num_keypoints, dropout=0.25, device=device)
-            else:
-                edges = create_edges(num_nodes=num_keypoints)
-                adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-                keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+        # GraFormer            
+        input_size = 3136
+        edges = create_edges(num_nodes=init_num_kps)
+        adj = adj_mx_from_edges(num_pts=init_num_kps, edges=edges, sparse=False)            
+        keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), 
+                                        n_pts=init_num_kps, num_layers=5, n_head=4, dropout=0.25)
+        feature_extractor = TwoMLPHead(256 * 14 * 14, 1024)
+        input_size += 1024
+        # Coarse-to-fine GraFormer
+        mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 3), n_pts=num_keypoints, dropout=0.25, device=device)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
@@ -243,17 +232,9 @@ class KeypointRCNN(FasterRCNN):
         self.roi_heads.keypoint_head = keypoint_head
         self.roi_heads.keypoint_predictor = keypoint_predictor
 
-        if add_graformer:
-            self.roi_heads.keypoint_graformer = keypoint_graformer
-            if num_keypoints > 29: # i.e. mesh
-                # self.roi_heads.pooling = pooling
-                self.roi_heads.feature_extractor = feature_extractor
-                self.roi_heads.mesh_graformer = mesh_graformer
-            else:
-                self.roi_heads.mesh_graformer = None
-
-        else:
-            self.roi_heads.keypoint_graformer = None
+        self.roi_heads.keypoint_graformer = keypoint_graformer
+        self.roi_heads.feature_extractor = feature_extractor
+        self.roi_heads.mesh_graformer = mesh_graformer
 
 
 class KeypointRCNNHeads(nn.Sequential):
@@ -375,12 +356,4 @@ def keypointrcnn_resnet50_fpn(pretrained=False, progress=True,
         pretrained_backbone = False
     backbone = resnet_fpn_backbone('resnet50', pretrained_backbone, trainable_layers=trainable_backbone_layers)
     model = KeypointRCNN(backbone, num_classes, num_keypoints=num_keypoints, **kwargs)
-    if pretrained:
-        key = 'keypointrcnn_resnet50_fpn_coco'
-        if pretrained == 'legacy':
-            key += '_legacy'
-        state_dict = load_state_dict_from_url(model_urls[key],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
-        overwrite_eps(model, 0.0)
     return model
