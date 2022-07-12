@@ -71,7 +71,7 @@ model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_k
 print('Keypoint RCNN is loaded')
 print(model)
 
-if 'cuda' in device:
+if torch.cuda.is_available():
     model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
     model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
     model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]  
