@@ -148,6 +148,7 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     # Plot predicted 3D Mesh
     ax = fig.add_subplot(height, width, 8, projection="3d")
     predicted_keypoints3d = predictions['mesh3d'][idx][:, :3]
+    predicted_texture = predictions['mesh3d'][idx][:, 3:]
     if palm is not None:
         predicted_keypoints3d += palm
 
@@ -158,7 +159,7 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
         print(final_obj)
         plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")        
         final_faces = np.concatenate((handFaces, objFaces + 778), axis = 0)
-        write_obj(predicted_keypoints3d, final_faces, final_obj)
+        write_obj(predicted_keypoints3d, final_faces, final_obj, predicted_texture)
     else:
         write_obj(predicted_keypoints3d, handFaces, final_obj)
     
@@ -212,7 +213,7 @@ if args.generate_mesh:
 else:
     init_num_keypoints = num_keypoints
 testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, num_keypoints=num_keypoints)
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=16, collate_fn=collate_fn)
 print(len(testloader.dataset))
 print('Data loaded!')
 
