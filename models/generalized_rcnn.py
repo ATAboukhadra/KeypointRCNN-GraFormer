@@ -91,8 +91,6 @@ class GeneralizedRCNN(nn.Module):
                                      .format(degen_bb, target_idx))
 
         features = self.backbone(images.tensors)
-        # print(features['pool'].shape)
-        # print(self.backbone.body(images.tensors)['3'].shape)
         if isinstance(features, torch.Tensor):
             features = OrderedDict([('0', features)])
         proposals, proposal_losses = self.rpn(images, features, targets)

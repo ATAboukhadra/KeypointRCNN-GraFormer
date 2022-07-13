@@ -4,7 +4,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 
 python3 train_rcnn.py \
   --input_file ../HOPE/datasets/ho-v3-mesh/ \
-  --output_file ./checkpoints/ho-rcnn-hand/model- \
+  --output_file ./checkpoints/ho-rcnn-hand-mesh-3d/model- \
   --train \
   --val \
   --batch_size 1 \
@@ -17,6 +17,5 @@ python3 train_rcnn.py \
   --snapshot_epoch 1 \
   --num_iterations 50 \
   --gpu \
-  --graformer \
-  
+  # --object \  
 #   --generate_mesh \
