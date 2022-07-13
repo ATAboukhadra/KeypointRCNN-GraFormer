@@ -56,7 +56,9 @@ class MeshGraFormer(nn.Module):
             initial_pts = 29
             obj='Object'
         
-        hid_dim_list = [256, 64, 16, coords_dim[1]]
+        # hid_dim_list = [256, 64, 16, coords_dim[1]]
+        hid_dim_list = [hid_dim, hid_dim // 4, hid_dim // 16, coords_dim[1]]
+
         points_levels = [initial_pts, round(n_pts / 16), n_pts // 4, n_pts]
         self.mask = [torch.tensor([[[True] * points_levels[i]]]).to(device) for i in range(3)]
         

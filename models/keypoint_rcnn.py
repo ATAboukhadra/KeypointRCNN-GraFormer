@@ -205,15 +205,15 @@ class KeypointRCNN(FasterRCNN):
             if num_keypoints > 29: #i.e. mesh
                 # Feature Extractor
                 # pooling = nn.AdaptiveAvgPool2d((10, 14))
-                
+                num_features = 2048
                 edges = create_edges(num_nodes=init_num_kps)
                 adj = adj_mx_from_edges(num_pts=init_num_kps, edges=edges, sparse=False)            
                 keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), 
                                                 n_pts=init_num_kps, num_layers=5, n_head=4, dropout=0.25)
                 
-                feature_extractor = TwoMLPHead(256 * 14 * 14, 1024)
-                input_size += 1024
-                mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 6), n_pts=num_keypoints, dropout=0.25, device=device)
+                feature_extractor = TwoMLPHead(256 * 14 * 14, num_features)
+                input_size += num_features
+                mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=num_features//4, coords_dim=(input_size, 6), n_pts=num_keypoints, dropout=0.25, device=device)
             else:
                 edges = create_edges(num_nodes=num_keypoints)
                 adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)

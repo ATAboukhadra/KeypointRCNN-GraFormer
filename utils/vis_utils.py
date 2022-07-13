@@ -603,8 +603,14 @@ def read_annotation(base_dir, seq_name, file_id, split):
     return pkl_data
 
 
-def write_obj(verts, faces, filename):
-    m = pymeshlab.Mesh(verts, faces)
+def write_obj(verts, faces, filename, texture=None):
+    if texture is not None:
+        alpha = np.ones((verts.shape[0], 1))
+        v_color_matrix = np.append(texture, alpha, axis=1)
+        m = pymeshlab.Mesh(verts, faces, v_color_matrix=v_color_matrix)
+    else:
+        m = pymeshlab.Mesh(verts, faces)
     ms = pymeshlab.MeshSet()
     ms.add_mesh(m, f'{filename}')
-    ms.save_current_mesh(f'{filename}.obj', save_vertex_normal=True, save_face_color=True, save_polygonal=True)
+    ms.save_current_mesh(f'{filename}.obj', save_vertex_normal=True, save_vertex_color=True, save_polygonal=True)
+

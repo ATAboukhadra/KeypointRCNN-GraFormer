@@ -152,17 +152,19 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     if palm is not None:
         predicted_keypoints3d += palm
 
-    plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
     final_obj = filename.replace('.jpg', '').replace('.png', '')
     
     if num_keypoints > 778:
         print(final_obj)
-        plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")        
         final_faces = np.concatenate((handFaces, objFaces + 778), axis = 0)
         write_obj(predicted_keypoints3d, final_faces, final_obj, predicted_texture)
+        plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
+        plot3dVisualize(ax, predicted_keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")        
     else:
-        write_obj(predicted_keypoints3d, handFaces, final_obj)
+        write_obj(predicted_keypoints3d, handFaces, final_obj, predicted_texture)
+        plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
     
+
     cam_equal_aspect_3d(ax, predicted_keypoints3d[:num_keypoints], flip_x=False)
     ax.title.set_text('Predicted Mesh')
 
@@ -247,8 +249,9 @@ keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d', 'palm']
 c = 0
 
 
-supporting_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
-supporting_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
+supporting_dict = None
+# supporting_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
+# supporting_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
 
 output_dict = {}
 output_dict_mesh = {}
