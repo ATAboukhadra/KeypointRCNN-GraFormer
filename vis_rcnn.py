@@ -277,7 +277,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
     # predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
 
     path = data_dict[0][0]['path']
-    # print(path)
+    print(path)
     name = path.split('/')[-1]
 
     palm = labels['palm'][0]
