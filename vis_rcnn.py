@@ -10,9 +10,8 @@ import matplotlib.pyplot as plt
 from utils.dataset import Dataset
 from utils.vis_utils import *
 from tqdm import tqdm
-from GraFormer.common.loss import mpjpe
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
-from utils.train_utils import calculate_keypoints
+from utils.utils import calculate_keypoints, save_calculate_error, save_dicts, prepare_data_for_evaluation
 
 def collate_fn(batch):
     return tuple(zip(batch))
@@ -67,155 +66,89 @@ parser = argparse.ArgumentParser()
 # Loading dataset    
 parser.add_argument("--split", default='train', help="Which subset to evaluate on")
 parser.add_argument("--batch_size", type=int, default=1, help="Mini-batch size")
-parser.add_argument("--dimension", type=int, default=3, help="2D or 3D")
 parser.add_argument("--root", default='./datasets/ho/', help="Dataset root folder")
 parser.add_argument("--checkpoint_folder", default='ho', help="the folder of the pretrained model")
 parser.add_argument("--checkpoint_id", type=int, required=True, help="the id of the pretrained model")
 parser.add_argument("--gpu_number", type=int, nargs='+', default = [1], help="Identifies the GPU number to use.")
-parser.add_argument("--gpu", action='store_true', help="Switch for gpu computation.")
-parser.add_argument("--crop", action='store_true', help="Crop images around the center")
 parser.add_argument("--hdf5_path", default='', help="Path to HDF5 files to load to the memory for faster training, only suitable for sufficient memory")
 parser.add_argument("--seq", default='MPM13', help="Sequence Name")
-parser.add_argument("--generate_mesh", action='store_true', help="Generate 3D mesh")
 parser.add_argument("--object", action='store_true', help="generate pose or shape for object?")
 parser.add_argument("--visualize", action='store_true', help="Visualize results?")
-parser.add_argument("--graformer", action='store_true', help="Add graformer to Mask RCNN")
 parser.add_argument("--ycb_path", default='./datasets/ycb_models/', help="Input YCB models, directory")
-parser.add_argument("--feature_extractor", action='store_true', help="Add feature extractor in Mask RCNN")
+parser.add_argument("--num_features", type=int, default = 1024, help="Number of features passed to coarse-to-fine network")
+
 args = parser.parse_args()
 
 # Transformer function
 transform_function = transforms.Compose([transforms.ToTensor()])
 
-init_num_keypoints, num_keypoints = calculate_keypoints(args.object, args.generate_mesh)
+init_num_keypoints, num_keypoints = calculate_keypoints(args.object)
 
+# Dataloader
 testset = Dataset(root=args.root, load_set=args.split, transform=transform_function, num_keypoints=num_keypoints)
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=16, collate_fn=collate_fn)
 print(len(testloader.dataset))
 print('Data loaded!')
 
 use_cuda = False
-if args.gpu:
+if torch.cuda.is_available():
     use_cuda = True
 
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
 
+# Define model
 model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_keypoints, num_keypoints=num_keypoints, num_classes=2, device=device,
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, rpn_batch_size_per_image=1)
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, rpn_batch_size_per_image=1, num_features=args.num_features)
 
 if torch.cuda.is_available():
-    model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-    model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
-    model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]  
-
     model = model.cuda(device=args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
+### Load model
 pretrained_model = f'./checkpoints/{args.checkpoint_folder}/model-{args.checkpoint_id}.pkl'
 model.load_state_dict(torch.load(pretrained_model, map_location='cuda:1'))
 model = model.eval()
 print(model)
 print('model loaded!')
 
-minLoss = 100000
-criterion = nn.MSELoss()
 keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d', 'palm']
 c = 0
-
-supporting_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb'))
-supporting_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb'))
-
-output_dict = {}
-output_dict_mesh = {}
-
+# supporting_dicts = (pickle.load(open('./rcnn_outputs/rcnn_outputs_778_test_3d.pkl', 'rb')),
+#                     pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d.pkl', 'rb')))
+supporting_dicts = None
+output_dicts = ({}, {})
 errors = []
 
 for i, ts_data in tqdm(enumerate(testloader)):
         
     data_dict = ts_data
-
     path = data_dict[0][0]['path']
     if args.seq not in path:
         continue
-    # wrap them in Variable
-    targets = [{k: v.to(device) for k, v in t[0].items() if k in keys} for t in data_dict]
-    # print(targets)
+
+    ### Run inference
     inputs = [t[0]['inputs'].to(device) for t in data_dict]
-    # original_input = data_dict['original_image'].cpu().detach().numpy()[0]
-        
     outputs = model(inputs)
-    
     img = inputs[0].cpu().detach().numpy()
-    labels = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
-    predictions = {k: v.cpu().detach().numpy() for k, v in outputs[0].items()}
-
-    # predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
-
-    path = data_dict[0][0]['path']
-    # print(path)
-    name = path.split('/')[-1]
-
-    palm = labels['palm'][0]
-    if args.split == 'test':
-        labels = None
-
-    # if 'AP11' in path:
-    img = img.transpose(1, 2, 0) * 255
-    img = np.ascontiguousarray(img, np.uint8) 
+    
+    predictions, img, palm, labels = prepare_data_for_evaluation(data_dict, outputs, img, keys, device, args.split)
 
     ### Visualization
-
     if args.visualize:
+        name = path.split('/')[-1]
         if 1 in predictions['labels'] or (1 in predictions['labels'] and 2 in predictions['labels'] and args.object):
-        #     # visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}_GT/{name}', mesh=args.generate_mesh)
             visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', num_keypoints=num_keypoints, palm=palm)
         else:
             print(predictions['labels'], name)
             cv2.imwrite(f'./visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
     ### Evaluation
-    predicted_labels = list(predictions['labels'])
-    
-    if 1 in predicted_labels:
-        idx = predicted_labels.index(1) 
-        if args.dimension == 3:
-            keypoints = predictions['keypoints3d'][idx][:, :args.dimension]
-            mesh = predictions['mesh3d'][idx]
-        else:
-            keypoints = predictions['keypoints'][idx][:, :args.dimension]
-            mesh = np.array([])
-    
-        if args.split != 'test':
-            keypoints_gt = labels['keypoints'][0][:, :args.dimension]
-            error = mpjpe(torch.Tensor(keypoints[:21]), torch.Tensor(keypoints_gt[:21]))
-            errors.append(error)
-
-    else:
-        c += 1
-        if supporting_dict is not None:
-            keypoints = supporting_dict[path]
-            mesh = supporting_dict_mesh[path]
-        else:
-            keypoints = np.zeros((num_keypoints, args.dimension))
-            mesh = np.zeros((num_keypoints, args.dimension))
-        print(c)
-      
-    output_dict[path] = keypoints
-    output_dict_mesh[path] = mesh
-    # break
-# prof.stop()
+    c = save_calculate_error(path, predictions, labels, args.split, errors, output_dicts, c, supporting_dicts=supporting_dicts)
 
 if args.split != 'test':
     avg_error = np.average(np.array(errors))
     print('hand pose average error on validation set:', avg_error)
 
-output_dict = dict(sorted(output_dict.items()))
-print('Total number of predictions:', len(output_dict.keys()))
+save_dicts(output_dicts, args.split)
 
-with open(f'./rcnn_outputs/rcnn_outputs_{num_keypoints}_{args.split}_3d_v2.pkl', 'wb') as f:
-    pickle.dump(output_dict, f)
-
-output_dict_mesh = dict(sorted(output_dict_mesh.items()))
-with open(f'./rcnn_outputs_mesh/rcnn_outputs_{num_keypoints}_{args.split}_3d_v2.pkl', 'wb') as f:
-    pickle.dump(output_dict_mesh, f)

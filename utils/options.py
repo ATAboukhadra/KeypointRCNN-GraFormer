@@ -53,11 +53,6 @@ def parse_args_function():
         help="Mini-batch size"
     )
     parser.add_argument(
-        "--gpu",
-        action='store_true',
-        help="Switch for gpu computation."
-    )
-    parser.add_argument(
         "--gpu_number",
         type=int,
         nargs='+',
