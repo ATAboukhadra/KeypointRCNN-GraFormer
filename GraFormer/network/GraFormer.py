@@ -205,7 +205,7 @@ class GraFormer(nn.Module):
         super(GraFormer, self).__init__()
         self.n_layers = num_layers
         self.adj = adj
-        self.mask = torch.tensor([[[True] * n_pts]])
+        self.mask = torch.tensor([[[True] * n_pts]]).to(adj.device)
 
         _gconv_input = ChebConv(in_c=coords_dim[0], out_c=hid_dim, K=2)
         _gconv_layers = []

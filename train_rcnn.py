@@ -34,7 +34,7 @@ use_cuda = False
 if args.gpu:
     use_cuda = True
 
-init_num_kps, num_keypoints = calculate_keypoints(args.object, args.generate_mesh)
+init_num_kps, num_keypoints = calculate_keypoints(args.object)
 
 """ Configure a log """
 
@@ -58,7 +58,7 @@ if args.train:
     logging.info(f'size of training set: {len(trainset)}')
 
 if args.val:
-    valset = Dataset(root=root, load_set='val', transform=transform,num_keypoints=num_keypoints)
+    valset = Dataset(root=root, load_set='val', transform=transform, num_keypoints=num_keypoints)
     valloader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
     logging.info('Validation files loaded')
     logging.info(f'size of validation set: {len(valset)}')
@@ -67,14 +67,12 @@ if args.val:
 
 model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
                                 # rpn_batch_size_per_image=1,
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, device=device)
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                device=device, num_features=args.num_features)
 print('Keypoint RCNN is loaded')
 print(model)
 
 if torch.cuda.is_available():
-    model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-    model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
-    model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]  
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 

@@ -35,21 +35,22 @@ def freeze_component(model):
     for param in model.parameters():
         param.requires_grad = False
     
-def calculate_keypoints(obj, mesh):
-    if obj:
-        num_keypoints = 29
-    else:
-        num_keypoints = 21
+def calculate_keypoints(obj):
+    # if obj:
+    #     num_keypoints = 29
+    # else:
+    #     num_keypoints = 21
         
-    if mesh:
-        if obj:
-            num_keypoints = 1778
-        else:
-            num_keypoints = 778
+    # if mesh:
+    # if obj:
+    #     num_keypoints = 1778
+    # else:
+    #     num_keypoints = 778
     
-    if num_keypoints > 29:
-        init_num_kps = 21 if num_keypoints == 778 else 29
-    else:
-        init_num_kps = num_keypoints
+    # if num_keypoints > 29:
+    num_keypoints = 1778 if obj else 778
+    init_num_kps = 21 if num_keypoints == 778 else 29
+    # else:
+    #     init_num_kps = num_keypoints
 
     return init_num_kps, num_keypoints

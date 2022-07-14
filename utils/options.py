@@ -13,11 +13,13 @@ def parse_args_function():
         "--adj_matrix_root", 
         default='/datasets/adj_matrix', 
         help='Root folder for fixed adjacency matrix')
+    
     parser.add_argument(
         "--output_file",
         default='./checkpoints/model-',
         help="Prefix of output pkl filename"
     )
+    
     # Optional arguments.
     parser.add_argument(
         "--pretrained_model",
@@ -104,26 +106,18 @@ def parse_args_function():
         default = 10000,
         help="Maximum number of epochs."
     )
-    parser.add_argument(
-        "--generate_mesh",
-        action='store_true',
-        help="Generate 3D mesh"
-    )
+
     parser.add_argument(
         "--object",
         action='store_true',
         help="Generate 3D pose or mesh for the object"
     )
-    parser.add_argument(
-        "--graformer",
-        action='store_true',
-        help="Add graformer to Mask RCNN"
-    )
 
     parser.add_argument(
-        "--feature_extractor",
-        action='store_true',
-        help="Add feature extractor in Mask RCNN"
+        "--num_features",
+        type=int,
+        default = 1024,
+        help="Number of features passed to coarse-to-fine network"
     )
 
     parser.add_argument(

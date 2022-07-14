@@ -171,7 +171,7 @@ class KeypointRCNN(FasterRCNN):
                  bbox_reg_weights=None,
                  # keypoint parameters
                  keypoint_roi_pool=None, keypoint_head=None, keypoint_predictor=None,
-                 init_num_kps=21, num_keypoints=21, device='cpu'):
+                 init_num_kps=21, num_keypoints=21, device='cpu', num_features=1024):
 
         assert isinstance(keypoint_roi_pool, (MultiScaleRoIAlign, type(None)))
         if min_size is None:
@@ -199,14 +199,15 @@ class KeypointRCNN(FasterRCNN):
 
         # GraFormer            
         input_size = 3136
+        
         edges = create_edges(num_nodes=init_num_kps)
         adj = adj_mx_from_edges(num_pts=init_num_kps, edges=edges, sparse=False)            
         keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), 
                                         n_pts=init_num_kps, num_layers=5, n_head=4, dropout=0.25)
-        feature_extractor = TwoMLPHead(256 * 14 * 14, 1024)
-        input_size += 1024
+        feature_extractor = TwoMLPHead(256 * 14 * 14, num_features)
+        input_size += num_features
         # Coarse-to-fine GraFormer
-        mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=128, coords_dim=(input_size, 3), n_pts=num_keypoints, dropout=0.25, device=device)
+        mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=num_features // 4, coords_dim=(input_size, 3), n_pts=num_keypoints, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
