@@ -74,7 +74,7 @@ class GeneralizedRCNN(nn.Module):
             assert len(val) == 2
             original_image_sizes.append((val[0], val[1]))
         
-        original_images = [img.permute(2, 1, 0) for img in images]
+        original_images = [img.permute(1, 2, 0) for img in images]
         
         images, targets = self.transform(images, targets)
 

@@ -359,14 +359,14 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
         photometric_loss = calculate_photometric_loss(xyz_rgb_pred, images, palms, N, K)
         mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000 
         # print(photometric_loss, mesh3d_loss)
-        mesh3d_loss += photometric_loss
+        # mesh3d_loss += photometric_loss
         
         # mesh3d_loss_smooth = calculate_smoothing_loss(mesh3d_pred[:K], K)
         # if N > 1:
         #     mesh3d_loss_smooth += calculate_smoothing_loss(mesh3d_pred[K:K*2], K)
         # mesh3d_loss += mesh3d_loss_smooth
 
-        return keypoint_loss, keypoint3d_loss, mesh3d_loss
+        return keypoint_loss, keypoint3d_loss, mesh3d_loss, photometric_loss
     else:
         return keypoint_loss
 
@@ -933,13 +933,14 @@ class RoIHeads(nn.Module):
                 mesh3d_gt = [t["mesh3d"] for t in targets]
                 # Shift back using palms
                 palms_gt = [t["palm"] for t in targets]
-                rcnn_loss_keypoint, rcnn_loss_keypoint3d, rcnn_loss_mesh3d = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, 
+                rcnn_loss_keypoint, rcnn_loss_keypoint3d, rcnn_loss_mesh3d, rcnn_loss_photometric = keypointrcnn_loss(keypoint_logits, keypoint_proposals, gt_keypoints, pos_matched_idxs, 
                                                                         keypoint3d, keypoints3d_gt, mesh3d, mesh3d_gt, palms_gt=palms_gt, original_images=original_imgs)
                 
                 loss_keypoint = {
                     "loss_keypoint": rcnn_loss_keypoint,
                     "loss_keypoint3d": rcnn_loss_keypoint3d,
-                    "loss_mesh3d": rcnn_loss_mesh3d
+                    "loss_mesh3d": rcnn_loss_mesh3d,
+                    "loss_photometric": rcnn_loss_photometric
                 }
                 
             else:
@@ -1017,13 +1018,16 @@ def calculate_photometric_loss(xyz_rgb, images, centers, N, K):
 
     pts2D = project_3D_points(pts3D)
     pts2D = pts2D.view(N, K, 2)
-    B, W, H, _ = images.shape
+    B, H, W, _ = images.shape
 
     idx_x = pts2D[:, :, 0].clamp(min=0, max=W-1)
     idx_y = pts2D[:, :, 1].clamp(min=0, max=H-1)
     
     # torch.gather(images, 1, )
-    pixels = images[torch.arange(B).unsqueeze(1), idx_x, idx_y]
+    # pixels = images[torch.arange(B).unsqueeze(1), idx_y, idx_x]
+    # print(torch.max(idx_x), torch.max(idx_y), images.shape)
+    pixels = images[torch.arange(B).unsqueeze(1), idx_y, idx_x]
+
     # print(pixels.shape)
     pred_rgb = xyz_rgb[:, :, 3:]
 

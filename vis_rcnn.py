@@ -13,6 +13,7 @@ from tqdm import tqdm
 from GraFormer.common.loss import mpjpe
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 from manopth.manolayer import ManoLayer
+from utils.train_utils import generate_gt_texture, calculate_rgb_error
 
 cam_mat = np.array(
     [[617.343,0,      312.42],
@@ -61,7 +62,8 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     # print(predicted_keypoints3d.shape)
     # if palm is not None:
     #     predicted_keypoints3d += palm
-        
+    final_obj = filename.replace('.jpg', '').replace('.png', '').replace('visual_results', 'mesh')
+    
     projected_keypoints2d = project_3D_points(cam_mat, predicted_keypoints3d + palm, is_OpenGL_coords=False)
 
     # Plot GT bounding boxes
@@ -114,9 +116,14 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
         keypoints3d = labels['mesh3d'][0][:, :3]
         if palm is not None:
             keypoints3d += palm
+        
+        # print(img.shape, max(img))
+        texture = generate_gt_texture(img, keypoints3d)
         plot3dVisualize(ax, keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
         if num_keypoints > 778:
             plot3dVisualize(ax, keypoints3d[778:], objFaces, flip_x=False, isOpenGLCoords=False, c="b")
+            final_faces = np.concatenate((handFaces, objFaces + 778), axis = 0)
+            write_obj(keypoints3d, final_faces, final_obj.replace('mesh', 'mesh_gt'), texture)
         cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
         ax.title.set_text('Original Mesh')
     
@@ -151,11 +158,9 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     predicted_texture = predictions['mesh3d'][idx][:, 3:]
     if palm is not None:
         predicted_keypoints3d += palm
-
-    final_obj = filename.replace('.jpg', '').replace('.png', '')
     
     if num_keypoints > 778:
-        print(final_obj)
+        # print(final_obj)
         final_faces = np.concatenate((handFaces, objFaces + 778), axis = 0)
         write_obj(predicted_keypoints3d, final_faces, final_obj, predicted_texture)
         plot3dVisualize(ax, predicted_keypoints3d[:778], handFaces, flip_x=False, isOpenGLCoords=False, c="r")
@@ -257,6 +262,7 @@ output_dict = {}
 output_dict_mesh = {}
 
 errors = []
+rgb_errors = []
 
 for i, ts_data in tqdm(enumerate(testloader)):
         
@@ -280,7 +286,7 @@ for i, ts_data in tqdm(enumerate(testloader)):
     # predictions = {k: v.cpu().detach().numpy() for k, v in targets[0].items()}
 
     path = data_dict[0][0]['path']
-    print(path)
+    # print(path)
     name = path.split('/')[-1]
 
     palm = labels['palm'][0]
@@ -306,17 +312,15 @@ for i, ts_data in tqdm(enumerate(testloader)):
     
     if 1 in predicted_labels:
         idx = predicted_labels.index(1) 
-        if args.dimension == 3:
-            keypoints = predictions['keypoints3d'][idx][:, :args.dimension]
-            mesh = predictions['mesh3d'][idx]
-        else:
-            keypoints = predictions['keypoints'][idx][:, :args.dimension]
-            mesh = np.array([])
-    
+        keypoints = predictions['keypoints3d'][idx]
+        mesh = predictions['mesh3d'][idx]
+        # print(keypoints.shape)
         if args.split != 'test':
-            keypoints_gt = labels['keypoints'][0][:, :args.dimension]
-            error = mpjpe(torch.Tensor(keypoints[:21]), torch.Tensor(keypoints_gt[:21]))
+            mesh_gt = labels['mesh3d'][0]
+            error = mpjpe(torch.Tensor(mesh[:778, :3]), torch.Tensor(mesh_gt[:778, :3]))
             errors.append(error)
+            rgb_error = calculate_rgb_error(img, labels['mesh3d'][0][:, :3], mesh[:, 3:])
+            rgb_errors.append(rgb_error)
 
     else:
         c += 1
@@ -329,13 +333,17 @@ for i, ts_data in tqdm(enumerate(testloader)):
         print(c)
       
     output_dict[path] = keypoints
-    output_dict_mesh[path] = mesh
+    output_dict_mesh[path] = mesh[:778, :3]
     # break
 # prof.stop()
 
 if args.split != 'test':
     avg_error = np.average(np.array(errors))
-    print('hand pose average error on validation set:', avg_error)
+    print('Hand shape average error on validation set:', avg_error)
+
+    avg_rgb_error = np.average(np.array(rgb_errors))
+    print('Texture average error on validation set:', avg_rgb_error)
+
 
 output_dict = dict(sorted(output_dict.items()))
 print('Total number of predictions:', len(output_dict.keys()))

@@ -128,14 +128,12 @@ if args.train:
     logging.info('Begin training the network...')
     
     for epoch in range(start, args.num_iterations):  # loop over the dataset multiple times
-    
-        running_loss2d = 0.0
         train_loss2d = 0.0
+        running_loss2d = 0.0
         running_loss3d = 0.0
-        train_loss3d = 0.0
         running_mesh_loss3d = 0.0
-        train_mesh_loss3d = 0.0
-        
+        running_photometric_loss = 0.0
+
         for i, tr_data in enumerate(trainloader):
             
             # get the inputs
@@ -148,10 +146,14 @@ if args.train:
             targets = [{k: v.to(device) for k, v in t[0].items() if k in keys} for t in data_dict]
             inputs = [t[0]['inputs'].to(device) for t in data_dict]
             loss_dict = model(inputs, targets)
-
+            # print(loss_dict)
             # Calculate Loss
-            loss = sum(loss for loss in loss_dict.values())
-            
+            if epoch > 0:
+                loss = sum(loss for _, loss in loss_dict.items())
+            else:
+                # print(loss_dict.keys())
+                loss = sum(loss for k, loss in loss_dict.items() if k != 'loss_photometric')
+                
             # Backpropagate
             loss.backward()
             optimizer.step()
@@ -163,23 +165,23 @@ if args.train:
             if 'loss_mesh3d' in loss_dict.keys():
                 mesh_loss3d = loss_dict['loss_mesh3d']
                 running_mesh_loss3d += mesh_loss3d.data
-                train_mesh_loss3d += mesh_loss3d.data
                 
             # print(loss_dict['loss_keypoint3d'])
-            running_loss2d += loss2d.data
             train_loss2d += loss2d.data
+            
+            running_loss2d += loss2d.data
             running_loss3d += loss3d.data
-            train_loss3d += loss3d.data
-            if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
-                if 'loss_mesh3d' in loss_dict.keys():
-                    logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
-                    (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch, running_mesh_loss3d / args.log_batch))
-                    running_mesh_loss3d = 0.0
-                else:
+            running_photometric_loss += loss_dict['loss_photometric'].data
+            
 
-                    logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f' % (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch))
+            if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
+                logging.info('[%d, %5d] loss 2d: %.4f, loss 3d: %.4f, mesh loss 3d:%.4f, photometric loss: %.4f' % 
+                (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch, 
+                running_mesh_loss3d / args.log_batch, running_photometric_loss / args.log_batch))
+                running_mesh_loss3d = 0.0
                 running_loss2d = 0.0
                 running_loss3d = 0.0
+                running_photometric_loss = 0.0
         losses.append((train_loss2d / (i+1)).cpu().numpy())
         
         if (epoch+1) % args.snapshot_epoch == 0:
@@ -190,6 +192,7 @@ if args.train:
             val_loss2d = 0.0
             val_loss3d = 0.0
             val_mesh_loss3d = 0.0
+            val_photometric_loss = 0.0
             for v, val_data in enumerate(valloader):
                 # get the inputs
                 data_dict = val_data
@@ -205,12 +208,13 @@ if args.train:
 
                 val_loss2d += loss2d.data
                 val_loss3d += loss3d.data
-            
+                val_photometric_loss += loss_dict['loss_photometric'].data
+
                 if 'loss_mesh3d' in loss_dict.keys():
                     mesh_loss3d = loss_dict['loss_mesh3d']
                     val_mesh_loss3d += mesh_loss3d.data
-            
-            logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
+            logging.info('val loss 2d: %.4f, val loss 3d: %.4f, val mesh loss 3d: %.4f, val photometric loss: %.4f' % 
+            (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1), val_photometric_loss / (v+1)))
         # if args.freeze and epoch == 0:
         #     logging.info('Freezing Backbone and RPN ..')
             # freeze_component(model.module.backbone)
