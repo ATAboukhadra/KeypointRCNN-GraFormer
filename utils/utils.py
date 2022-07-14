@@ -60,8 +60,8 @@ def save_calculate_error(path, predictions, labels, split, errors, output_dicts,
         mesh = predictions['mesh3d'][idx][:778]
     
         if split != 'test':
-            keypoints_gt = labels['keypoints'][0][:21]
-            error = mpjpe(torch.Tensor(keypoints), torch.Tensor(keypoints_gt))
+            mesh_gt = labels['mesh3d'][0][:778]
+            error = mpjpe(torch.Tensor(mesh), torch.Tensor(mesh_gt))
             errors.append(error)
 
     else:

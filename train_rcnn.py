@@ -104,11 +104,11 @@ if args.train:
     logging.info('Begin training the network...')
     
     for epoch in range(start, args.num_iterations):  # loop over the dataset multiple times
-    
-        running_loss2d = 0.0
+        
         train_loss2d = 0.0
-        train_loss3d = 0.0
-        train_mesh_loss3d = 0.0
+        running_loss2d = 0.0
+        running_loss3d = 0.0
+        running_mesh_loss3d = 0.0
         
         for i, tr_data in enumerate(trainloader):
             
