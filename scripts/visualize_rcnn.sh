@@ -5,8 +5,8 @@ python3 vis_rcnn.py \
  --ycb_path ./datasets/ycb_models/ \
  --checkpoint_folder hand-mesh \
  --checkpoint_id 1 \
- --split train \
+ --split test \
  --seq rgb \
  --num_features 2048 \
- --visualize
+#  --visualize
 #  --object \
