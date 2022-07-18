@@ -51,6 +51,7 @@ def mpjpe(predicted, target):
     return torch.mean(torch.norm(predicted - target, dim=len(target.shape) - 1))
 
 def save_calculate_error(path, predictions, labels, split, errors, output_dicts, c, supporting_dicts=None):
+    """Stores the results of the model in a dict and calculates error in case of available gt"""
 
     predicted_labels = list(predictions['labels'])
 
@@ -80,7 +81,7 @@ def save_calculate_error(path, predictions, labels, split, errors, output_dicts,
     return c
 
 def save_dicts(output_dicts, split):
-
+    
     output_dict = dict(sorted(output_dicts[0].items()))
     output_dict_mesh = dict(sorted(output_dicts[1].items()))
     print('Total number of predictions:', len(output_dict.keys()))
@@ -92,6 +93,7 @@ def save_dicts(output_dicts, split):
         pickle.dump(output_dict_mesh, f)
 
 def prepare_data_for_evaluation(data_dict, outputs, img, keys, device, split):
+    """Postprocessing function"""
 
     targets = [{k: v.to(device) for k, v in t[0].items() if k in keys} for t in data_dict]
 

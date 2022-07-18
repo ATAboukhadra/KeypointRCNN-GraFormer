@@ -55,7 +55,6 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     save_mesh(predictions, idx, num_keypoints, filename, hand_faces, obj_faces)
     
     fig.tight_layout()
-    # plt.subplots_adjust(wspace=0.2, hspace=0.3)
     plt.show()
     # plt.savefig(filename)
     plt.close(fig)

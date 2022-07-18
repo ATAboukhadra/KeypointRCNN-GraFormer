@@ -80,7 +80,6 @@ class Dataset(data.Dataset):
             bb, mesh2d = np.array([]), np.array([])
             boxes, labels, keypoints, keypoints3d, mesh3d = torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([]), torch.Tensor([])
 
-        # print(palm)
         data = {
             'path': image_path,
             'original_image': original_image,

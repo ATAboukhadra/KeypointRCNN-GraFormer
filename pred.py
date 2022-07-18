@@ -16,9 +16,9 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
     # init output containers
     xyz_pred_list, verts_pred_list = list(), list()
 
-    predictions_dict = pickle.load(open('./rcnn_outputs/rcnn_outputs_21_test_3d_v2.pkl', 'rb'))
-    predictions_dict_mesh = pickle.load(open('./rcnn_outputs_mesh/rcnn_outputs_778_test_3d_v2.pkl', 'rb'))
-    # print(predictions_dict)
+    predictions_dict = pickle.load(open(f'./rcnn_outputs/rcnn_outputs_21_test_3d_{version}.pkl', 'rb'))
+    predictions_dict_mesh = pickle.load(open(f'./rcnn_outputs_mesh/rcnn_outputs_778_test_3d_{version}.pkl', 'rb'))
+
     # read list of evaluation files
     with open(os.path.join(base_path, set_name+'.txt')) as f:
         file_list = f.readlines()
@@ -80,19 +80,12 @@ def pred_template(img, aux_info, predictions, path, predictions_mesh=None):
     """
     # TODO: Put your algorithm here, which computes (metric) 3D joint coordinates and 3D vertex positions
     order_idx = np.argsort(np.array([0, 13, 14, 15, 16, 1, 2, 3, 17, 4, 5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20]))
-    coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
-    
-    # print(path, aux_info['handJoints3D'], predictions[path].dot(coord_change_mat.T)[order_idx] / 1000)
-    
-    # path = path.replace('v2', 'v3').replace('.png', '.jpg')
+    coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)    
 
     # 3D coordinates of the 21 joints
     xyz = np.round(predictions[path][:21].dot(coord_change_mat.T)[order_idx] / 1000 + aux_info['handJoints3D'], 10)
     # 3D coordinates of the 778 vertices
     verts = np.round(predictions_mesh[path][:778].dot(coord_change_mat.T) / 1000 + aux_info['handJoints3D'], 10)
-    # print(xyz)
-    # print(xyz.shape, verts.shape, xyz[0], verts[0])
-    # verts = np.zeros((778, 3)) # 3D coordinates of the shape vertices
     return xyz, verts
 
 
