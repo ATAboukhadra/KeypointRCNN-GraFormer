@@ -371,7 +371,7 @@ class RoIHeads(nn.Module):
             
             keypoint_logits = self.keypoint_predictor(keypoint_features)
             batch, kps, H, W = keypoint_logits.shape
-            
+            # print(batch)
             # Heatmap refinement using GraFormer
             keypoint3d = torch.zeros((21, 3))
             mesh3d = torch.zeros((778, 3))

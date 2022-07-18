@@ -67,6 +67,7 @@ if args.val:
 
 model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
                                 # rpn_batch_size_per_image=1,
+                                box_detections_per_img=1,
                                 rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
                                 device=device, num_features=args.num_features)
 print('Keypoint RCNN is loaded')
