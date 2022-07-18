@@ -7,7 +7,7 @@ python3 train_rcnn.py \
   --output_file ./checkpoints/photometric-hand/model- \
   --train \
   --val \
-  --batch_size 2 \
+  --batch_size 1 \
   --gpu_number 1 \
   --learning_rate 0.0001 \
   --lr_step 100 \

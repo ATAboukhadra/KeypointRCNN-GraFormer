@@ -11,7 +11,7 @@ from utils.dataset import Dataset
 from utils.vis_utils import *
 from tqdm import tqdm
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
-from utils.utils import calculate_keypoints, save_calculate_error, save_dicts, prepare_data_for_evaluation
+from utils.utils import calculate_keypoints, save_calculate_error, save_dicts, prepare_data_for_evaluation, generate_gt_texture
 
 def collate_fn(batch):
     return tuple(zip(batch))
@@ -25,7 +25,6 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     fig_config = (fig, H, W)
     idx = list(predictions['labels']).index(1) #[0]
     hand_faces, obj_faces = load_faces()
-
     # Plot GT bounding boxes
     if labels is not None:
         plot_bb_ax(img, labels, fig_config, 1, 'GT BB')
@@ -39,14 +38,13 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
         # Plot GT 3D mesh
         plot_mesh3d(labels, 0, palm, num_keypoints, hand_faces, obj_faces, fig_config, 4, 'GT 3D mesh')
         
-        texture = generate_gt_texture(img, keypoints3d)
-        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
-        write_obj(keypoints3d, final_faces, final_obj.replace('mesh', 'mesh_gt'), texture)
-        
+        # Save textured mesh
+        texture = generate_gt_texture(img, labels['mesh3d'][0][:, :3])
+        save_mesh(labels, 0, num_keypoints, filename, hand_faces, obj_faces, texture, shape_dir='mesh_gt')
+
     # Plot predicted bounding boxes
     plot_bb_ax(img, predictions, fig_config, 5, 'Predicted BB')
     
-        
     # Plot predicted 2D keypoints
     plot_pose2d(img, predictions, idx, palm, fig_config, 6, 'Predicted 2D pose')
 
@@ -56,13 +54,9 @@ def visualize2d(img, predictions, labels=None, filename=None, num_keypoints=21, 
     # Plot predicted 3D Mesh
     plot_mesh3d(predictions, idx, palm, num_keypoints, hand_faces, obj_faces, fig_config, 8, 'Predicted 3D mesh')
     
-    # Save Mesh
-    predicted_mesh3d = predictions['mesh3d'][idx][:, :3]
+    # Save textured mesh
     predicted_texture = predictions['mesh3d'][idx][:, 3:]
-    final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
-    write_obj(predicted_keypoints3d, final_faces, final_obj, predicted_texture)
-    
-    save_mesh(predictions, idx, num_keypoints, filename, hand_faces, obj_faces)
+    save_mesh(predictions, idx, num_keypoints, filename, hand_faces, obj_faces, predicted_texture)
     
     fig.tight_layout()
     plt.show()
@@ -84,7 +78,7 @@ parser.add_argument("--seq", default='MPM13', help="Sequence Name")
 parser.add_argument("--object", action='store_true', help="generate pose or shape for object?")
 parser.add_argument("--visualize", action='store_true', help="Visualize results?")
 parser.add_argument("--ycb_path", default='./datasets/ycb_models/', help="Input YCB models, directory")
-parser.add_argument("--num_features", type=int, default = 1024, help="Number of features passed to coarse-to-fine network")
+parser.add_argument("--num_features", type=int, default=2048, help="Number of features passed to coarse-to-fine network")
 
 args = parser.parse_args()
 
@@ -153,10 +147,8 @@ for i, ts_data in tqdm(enumerate(testloader)):
             cv2.imwrite(f'./visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
     ### Evaluation
-    rgb_error = calculate_rgb_error(img, labels['mesh3d'][0][:, :3], mesh[:, 3:])
-    rgb_errors.append(rgb_error)
-    c = save_calculate_error(path, predictions, labels, args.split, errors, output_dicts, c, supporting_dicts=supporting_dicts)
-
+    c = save_calculate_error(path, predictions, labels, args.split, errors, output_dicts, c, supporting_dicts=supporting_dicts, rgb_errors=rgb_errors, img=img)
+    # break
 if args.split != 'test':
     avg_error = np.average(np.array(errors))
     print('Hand shape average error on validation set:', avg_error)

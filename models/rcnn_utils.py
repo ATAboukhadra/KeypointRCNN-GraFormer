@@ -279,7 +279,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     images = []
 
     zipped_data = zip(proposals, gt_keypoints, keypoint3d_gt, mesh3d_gt, palms_gt, original_images, keypoint_matched_idxs)
-    for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, palm_in_image, image, midx in enumerate(zipped_data):
+    for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, palm_in_image, image, midx in zipped_data:
 
         kp = gt_kp_in_image[midx]
         kp3d = gt_kp3d_in_image[midx]

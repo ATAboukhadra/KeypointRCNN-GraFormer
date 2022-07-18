@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import pickle
+
 def calculate_bounding_box(point2d, increase=False):
     pad_size = 15
     x_min = int(min(point2d[:,0]))
@@ -50,20 +51,22 @@ def mpjpe(predicted, target):
     assert predicted.shape == target.shape
     return torch.mean(torch.norm(predicted - target, dim=len(target.shape) - 1))
 
-def save_calculate_error(path, predictions, labels, split, errors, output_dicts, c, supporting_dicts=None):
+def save_calculate_error(path, predictions, labels, split, errors, output_dicts, c, supporting_dicts=None, rgb_errors=None, img=None):
     """Stores the results of the model in a dict and calculates error in case of available gt"""
 
+    
     predicted_labels = list(predictions['labels'])
 
     if 1 in predicted_labels:
         idx = predicted_labels.index(1) 
         keypoints = predictions['keypoints3d'][idx][:21]
-        mesh = predictions['mesh3d'][idx][:778]
-    
+        mesh = predictions['mesh3d'][idx]
         if split != 'test':
             mesh_gt = labels['mesh3d'][0][:778]
-            error = mpjpe(torch.Tensor(mesh), torch.Tensor(mesh_gt))
+            error = mpjpe(torch.Tensor(mesh[:778, :3]), torch.Tensor(mesh_gt))
             errors.append(error)
+            rgb_error = calculate_rgb_error(img, labels['mesh3d'][0], mesh[:, 3:])
+            rgb_errors.append(rgb_error)
 
     else:
         c += 1
