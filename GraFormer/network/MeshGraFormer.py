@@ -44,10 +44,11 @@ class GraphUnpool(nn.Module):
 
 
 class MeshGraFormer(nn.Module):
-    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=5, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix', device='cuda:1'):
+    def __init__(self, initial_adj, coords_dim=(2, 3), hid_dim=128, num_layers=5, n_head=4,  dropout=0.1, n_pts=21, adj_matrix_root='./GraFormer/adj_matrix'):
         super(MeshGraFormer, self).__init__()
         self.n_layers = num_layers
         self.initial_adj = initial_adj
+        self.device = initial_adj.device
         self.num_points_levels = 3
         if n_pts == 778:
             initial_pts = 21
@@ -56,14 +57,13 @@ class MeshGraFormer(nn.Module):
             initial_pts = 29
             obj='Object'
         
-        # hid_dim_list = [256, 64, 16, coords_dim[1]]
         hid_dim_list = [hid_dim, hid_dim // 4, hid_dim // 16, coords_dim[1]]
 
         points_levels = [initial_pts, round(n_pts / 16), n_pts // 4, n_pts]
-        self.mask = [torch.tensor([[[True] * points_levels[i]]]).to(device) for i in range(3)]
+        self.mask = [torch.tensor([[[True] * points_levels[i]]]).to(self.device) for i in range(3)]
         
-        self.adj = [initial_adj.to(device)]
-        self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/hand{obj}{points_levels[i]}.npz').toarray()).float().to(device) for i in range(1, 4)])
+        self.adj = [initial_adj.to(self.device)]
+        self.adj.extend([torch.from_numpy(scipy.sparse.load_npz(f'{adj_matrix_root}/hand{obj}{points_levels[i]}.npz').toarray()).float().to(self.device) for i in range(1, 4)])
                 
         gconv_inputs = []
         gconv_layers = []

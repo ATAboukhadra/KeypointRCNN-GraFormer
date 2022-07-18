@@ -9,7 +9,7 @@ import os.path
 import io
 import torch 
 from PIL import Image
-from utils.train_utils import calculate_bounding_box, create_rcnn_data
+from utils.utils import calculate_bounding_box, create_rcnn_data
 
 
 class Dataset(data.Dataset):

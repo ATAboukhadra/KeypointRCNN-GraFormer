@@ -10,6 +10,9 @@ import sys
 import matplotlib.pyplot as plt
 import cv2
 import pymeshlab
+from manopth.manolayer import ManoLayer
+
+
 """ General util functions. """
 def _assert_exist(p):
     msg = 'File does not exists: %s' % p
@@ -47,8 +50,6 @@ def showHandJoints(imgInOrg, gtIn, filename=None, dataset_name='ho', mode='pred'
     import cv2
 
     imgIn = np.copy(imgInOrg)
-    # print(imgIn.shape)
-    # print(type(imgIn))
     # Set color for each finger
 
     joint_color_code = [[139, 53, 255],
@@ -58,18 +59,6 @@ def showHandJoints(imgInOrg, gtIn, filename=None, dataset_name='ho', mode='pred'
                         [147, 147, 0],
                         [70, 17, 145]]
 
-    # joint_color_code = [[37, 168, 36],
-    #                     [37, 168, 36],
-    #                     [37, 168, 36],
-    #                     [37, 168, 36],
-    #                     [37, 168, 36],
-    #                     [37, 168, 36]]
-    # joint_color_code = [[255, 53, 139],
-    #                     [255, 56, 0],
-    #                     [237, 140, 43],
-    #                     [36, 168, 37],
-    #                     [0, 147, 147],
-    #                     [145, 17, 70]]
     if mode == 'gt':
         joint_color_code = [[0, 0, 0],
                         [0, 0, 0],
@@ -364,101 +353,103 @@ def show2DMesh(fig, ax, img, mesh2DPoints, gt=False, filename=None):
         fig.savefig(f'{filename}', bbox_inches=extent)
 
 
+def draw_confidence(image, keypoints, scores):
+    keypoints = np.round(keypoints).astype(np.int)
+
+    high_confidence = np.where(scores >= 2)[0]
+    low_confidence = np.where(scores < 2)[0]
+    
+    for idx in high_confidence:
+        cv2.circle(image, center=(keypoints[idx][0], keypoints[idx][1]), radius=3, color=[43, 140, 237], thickness=-1)
+    for idx in low_confidence:
+        cv2.circle(image, center=(keypoints[idx][0], keypoints[idx][1]), radius=3, color=[0, 0, 0], thickness=-1)
+    
+    return image
+
+def plot_bb_ax(img, labels, fig_config, subplot_id, plot_txt):
+    fig, H, W = fig_config
+    bb_image = np.copy(img)
+    ax = fig.add_subplot(H, W, subplot_id)
+    for bb in labels['boxes']:
+        bb_image = draw_bb(bb_image, bb, [229, 255, 204])    
+    
+    ax.title.set_text(plot_txt)
+    ax.imshow(bb_image)
+
+def plot_pose2d(img, labels, idx, center, fig_config, subplot_id, plot_txt):
+
+    cam_mat = np.array(
+        [[617.343,0,      312.42],
+        [0,       617.343,241.42],
+        [0,       0,       1]
+    ])
+    
+    keypoints3d = labels['keypoints3d'][idx]
+    keypoints = project_3D_points(cam_mat, keypoints3d + center, is_OpenGL_coords=False)
+
+    fig, H, W = fig_config
+    gt_image = np.copy(img)
+    
+    ax = fig.add_subplot(H, W, subplot_id)
+    gt_image = showHandJoints(gt_image, keypoints[:21])
+    if keypoints.shape[0] > 21:
+        gt_image = showObjJoints(gt_image, keypoints[21:])
+    
+    ax.title.set_text(plot_txt)
+    ax.imshow(gt_image)
+    
+def plot_pose3d(labels, idx, center, num_keypoints, fig_config, subplot_id, plot_txt):
+    fig, H, W = fig_config
+    keypoints3d = labels['keypoints3d'][idx]
+    if center is not None:
+        keypoints3d += center
+
+    ax = fig.add_subplot(H, W, subplot_id, projection="3d")
+    show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
+    if num_keypoints > 778:
+        show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
+    
+    ax.title.set_text(plot_txt)
+
+def plot_mesh3d(labels, idx, center, num_keypoints, hand_faces, obj_faces, fig_config, subplot_id, plot_txt):
+    fig, H, W = fig_config
+    ax = fig.add_subplot(H, W, subplot_id, projection="3d")
+    keypoints3d = labels['mesh3d'][idx]
+    if center is not None:
+        keypoints3d += center
+    
+    plot3dVisualize(ax, keypoints3d[:778], hand_faces, flip_x=False, isOpenGLCoords=False, c="r")
+    if num_keypoints > 778:
+        plot3dVisualize(ax, keypoints3d[778:], obj_faces, flip_x=False, isOpenGLCoords=False, c="b")
+    cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
+    ax.title.set_text(plot_txt)
+
+def load_faces():
+    
+    # Load hand faces
+    mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, ncomps=6, flat_hand_mean=True)
+    hand_faces = mano_layer.th_faces
+    
+    # Loading object faces
+    obj_mesh = read_obj('../HOPE/datasets/spheres/sphere_1000.obj')
+    obj_faces = obj_mesh.f
+
+    return hand_faces, obj_faces
+
+def save_mesh(labels, idx, num_keypoints, filename, hand_faces, obj_faces):
+    predicted_keypoints3d = labels['mesh3d'][idx]
+    final_obj = filename.replace('.jpg', '').replace('.png', '')
+    if num_keypoints > 778:
+        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
+        write_obj(predicted_keypoints3d, final_faces, final_obj)
+    else:
+        write_obj(predicted_keypoints3d, hand_faces, final_obj)
+
+
 class Minimal(object):
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
         
-
-
-class Open3DWin():
-    def __init__(self):
-        import open3d
-        self.vis = open3d.visualization.Visualizer()
-        self.vis.create_window(window_name='Open3D', width=640, height=480, left=0, top=0,
-                          visible=True)  # use visible=True to visualize the point cloud
-        # vis.get_render_option().light_on = False
-        self.vis.get_render_option().mesh_show_back_face = True
-        
-    def capture_view(self, mesh, view_mat_path=None,intrinsics=None):
-        
-        if not isinstance(view_mat_path, np.ndarray) and view_mat_path is not None:
-            assert os.path.exists(view_mat_path)
-            view_mat = np.loadtxt(view_mat_path)
-        else:
-            view_mat = view_mat_path
-    
-        camera_param = self.vis.get_view_control().convert_to_pinhole_camera_parameters()
-        cx = camera_param.intrinsic.intrinsic_matrix[0, 2]
-        cy = camera_param.intrinsic.intrinsic_matrix[1, 2]
-    
-        if intrinsics is not None:
-            camera_param.intrinsic.set_intrinsics(camera_param.intrinsic.width, camera_param.intrinsic.height,
-                                                  intrinsics[0, 0], intrinsics[1, 1], cx, cy)
-    
-        if view_mat is not None:
-            camera_param = self.vis.get_view_control().convert_to_pinhole_camera_parameters()
-            camera_param.extrinsic = view_mat
-    
-        ctr = self.vis.get_view_control()
-        # ctr.set_constant_z_far(20.)
-        # ctr.set_constant_z_near(-2)
-        for m in mesh:
-            self.vis.add_geometry(m)
-    
-        ctr.convert_from_pinhole_camera_parameters(camera_param)
-    
-    
-    
-        # vis.run()
-    
-        render = self.vis.capture_screen_float_buffer(do_render=True)
-    
-        render = (np.asarray(render)*255).astype(np.uint8)
-
-        for m in mesh:
-            self.vis.remove_geometry(m)
-    
-        return render
-
-def open3dVisualize(mList, colorList, faceList=None):
-    import open3d
-    o3dMeshList = []
-    for i, m in enumerate(mList):
-        mesh = open3d.geometry.TriangleMesh()
-        numVert = 0
-        if hasattr(m, 'r'):
-            mesh.vertices = open3d.utility.Vector3dVector(np.copy(m.r))
-            numVert = m.r.shape[0]
-            faces = m.f
-        elif hasattr(m, 'v'):
-            mesh.vertices = open3d.utility.Vector3dVector(np.copy(m.v))
-            numVert = m.v.shape[0]
-            faces = m.f
-        elif isinstance(m, np.ndarray): # In case of a mano layer output, use passed faces (Needs to be scaled)
-            mesh.vertices = open3d.utility.Vector3dVector(np.copy(m)/1000)
-            numVert = m.shape[0]
-            faces = faceList[i]
-        else:
-            raise Exception('Unknown Mesh format')
-
-        mesh.triangles = open3d.utility.Vector3iVector(np.copy(faces)) 
-        if colorList[i] == 'r':
-            mesh.vertex_colors = open3d.utility.Vector3dVector(np.tile(np.array([[0.6, 0.2, 0.2]]), [numVert, 1]))
-        elif colorList[i] == 'gy':
-            mesh.vertex_colors = open3d.utility.Vector3dVector(np.tile(np.array([[0.5, 0.5, 0.5]]), [numVert, 1]))
-        elif colorList[i] == 'b':
-            mesh.vertex_colors = open3d.utility.Vector3dVector(np.tile(np.array([[0.5, 0.6, 0.9]]), [numVert, 1]))
-        elif colorList[i] == 'gn':
-            mesh.vertex_colors = open3d.utility.Vector3dVector(np.tile(np.array([[0.5, 0.8, 0.7]]), [numVert, 1]))
-        elif isinstance(colorList[i], np.ndarray):
-            assert colorList[i].shape == np.array(mesh.vertices).shape
-            mesh.vertex_colors = open3d.utility.Vector3dVector(colorList[i])
-        else:
-            raise Exception('Unknown mesh color')
-
-        o3dMeshList.append(mesh)
-    open3d.visualization.draw_geometries(o3dMeshList)
-
 def read_obj(filename):
     """ Reads the Obj file. Function reused from Matthew Loper's OpenDR package"""
 
@@ -479,19 +470,6 @@ def read_obj(filename):
         elif key == 'f':
             spl = [l.split('/') for l in values]
             d['f'].append([np.array([int(l[0])-1 for l in spl[:3]], dtype=np.uint32)])
-            # if len(spl[0]) > 1 and spl[1] and 'ft' in d:
-            #     d['ft'].append([np.array([int(l[1])-1 for l in spl[:3]])])
-            # if len(spl[0]) > 2 and spl[2] and 'fn' in d:
-            #     d['fn'].append([np.array([int(l[2])-1 for l in spl[:3]])])
-
-            # TOO: redirect to actual vert normals?
-            #if len(line[0]) > 2 and line[0][2]:
-            #    d['fn'].append([np.concatenate([l[2] for l in spl[:3]])])
-        # elif key == 'vn':
-        #     d['vn'].append([np.array([float(v) for v in values])])
-        # elif key == 'vt':
-        #     d['vt'].append([np.array([float(v) for v in values])])
-
 
     for k, v in d.items():
         if k in ['v','f']:
@@ -522,10 +500,6 @@ def db_size(set_name, version='v2'):
             return 11524
         elif version == 'v3':
             return 20137
-        elif version == 'fhad_test':
-            return 5040
-        elif version == 'fhad_val':
-            return 5442
         else:
             raise NotImplementedError
     else:
@@ -604,6 +578,7 @@ def read_annotation(base_dir, seq_name, file_id, split):
 
 
 def write_obj(verts, faces, filename, texture=None):
+    """Saves and obj file using vertices and faces"""
     if texture is not None:
         alpha = np.ones((verts.shape[0], 1))
         v_color_matrix = np.append(texture, alpha, axis=1)

@@ -16,7 +16,7 @@ import os
 
 from utils.options import parse_args_function
 from utils.dataset import Dataset
-# from utils.train_utils import freeze_component
+from utils.utils import freeze_component, calculate_keypoints
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -29,23 +29,12 @@ root = args.input_file
 
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
-# device = 'cpu'
 
 use_cuda = False
-if args.gpu:
+if torch.cuda.is_available():
     use_cuda = True
 
-if args.object:
-    num_keypoints = 29
-else:
-    num_keypoints = 21
-    
-if args.generate_mesh:
-    if args.object:
-        num_keypoints = 1778
-    else:
-        num_keypoints = 778
-
+init_num_kps, num_keypoints = calculate_keypoints(args.object)
 
 """ Configure a log """
 
@@ -69,34 +58,22 @@ if args.train:
     logging.info(f'size of training set: {len(trainset)}')
 
 if args.val:
-    valset = Dataset(root=root, load_set='val', transform=transform,num_keypoints=num_keypoints)
+    valset = Dataset(root=root, load_set='val', transform=transform, num_keypoints=num_keypoints)
     valloader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
     logging.info('Validation files loaded')
     logging.info(f'size of validation set: {len(valset)}')
 
 """ load model """
 
-if num_keypoints > 29:
-    init_num_kps = 21 if num_keypoints == 778 else 29
-else:
-    init_num_kps = num_keypoints
-
-model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
-                                # rpn_positive_fraction=1, 
+model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
                                 # rpn_batch_size_per_image=1,
-                                device=device, add_graformer=args.graformer)
+                                box_detections_per_img=1,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                device=device, num_features=args.num_features)
 print('Keypoint RCNN is loaded')
 print(model)
 
-if use_cuda and torch.cuda.is_available():
-    if args.graformer:
-        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-        if num_keypoints > 29:
-            model.roi_heads.mesh_graformer.mask = [m.cuda(args.gpu_number[0]) for m in model.roi_heads.mesh_graformer.mask]
-            model.roi_heads.mesh_graformer.adj = [a.cuda(args.gpu_number[0]) for a in model.roi_heads.mesh_graformer.adj]
-            
-    
+if torch.cuda.is_available():
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
@@ -128,12 +105,14 @@ if args.train:
     logging.info('Begin training the network...')
     
     for epoch in range(start, args.num_iterations):  # loop over the dataset multiple times
+        
         train_loss2d = 0.0
         running_loss2d = 0.0
         running_loss3d = 0.0
         running_mesh_loss3d = 0.0
         running_photometric_loss = 0.0
 
+        
         for i, tr_data in enumerate(trainloader):
             
             # get the inputs
@@ -159,20 +138,11 @@ if args.train:
             optimizer.step()
 
             # print statistics
-            loss2d = loss_dict['loss_keypoint']
-            loss3d = loss_dict['loss_keypoint3d']
-            
-            if 'loss_mesh3d' in loss_dict.keys():
-                mesh_loss3d = loss_dict['loss_mesh3d']
-                running_mesh_loss3d += mesh_loss3d.data
-                
-            # print(loss_dict['loss_keypoint3d'])
-            train_loss2d += loss2d.data
-            
-            running_loss2d += loss2d.data
-            running_loss3d += loss3d.data
+            train_loss2d += loss_dict['loss_keypoint'].data
+            running_loss2d += loss_dict['loss_keypoint'].data
+            running_loss3d += loss_dict['loss_keypoint3d'].data
+            running_mesh_loss3d += loss_dict['loss_mesh3d'].data
             running_photometric_loss += loss_dict['loss_photometric'].data
-            
 
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
                 logging.info('[%d, %5d] loss 2d: %.4f, loss 3d: %.4f, mesh loss 3d:%.4f, photometric loss: %.4f' % 
@@ -182,6 +152,7 @@ if args.train:
                 running_loss2d = 0.0
                 running_loss3d = 0.0
                 running_photometric_loss = 0.0
+
         losses.append((train_loss2d / (i+1)).cpu().numpy())
         
         if (epoch+1) % args.snapshot_epoch == 0:
@@ -202,23 +173,18 @@ if args.train:
                 inputs = [t[0]['inputs'].to(device) for t in data_dict]    
                 loss_dict = model(inputs, targets)
                 
-                # loss = sum(loss for loss in loss_dict.values())
-                loss2d = loss_dict['loss_keypoint']
-                loss3d = loss_dict['loss_keypoint3d']
-
-                val_loss2d += loss2d.data
-                val_loss3d += loss3d.data
+                val_loss2d += loss_dict['loss_keypoint'].data
+                val_loss3d += loss_dict['loss_keypoint3d'].data
+                val_mesh_loss3d += loss_dict['loss_mesh3d'].data
                 val_photometric_loss += loss_dict['loss_photometric'].data
 
-                if 'loss_mesh3d' in loss_dict.keys():
-                    mesh_loss3d = loss_dict['loss_mesh3d']
-                    val_mesh_loss3d += mesh_loss3d.data
             logging.info('val loss 2d: %.4f, val loss 3d: %.4f, val mesh loss 3d: %.4f, val photometric loss: %.4f' % 
-            (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1), val_photometric_loss / (v+1)))
-        # if args.freeze and epoch == 0:
-        #     logging.info('Freezing Backbone and RPN ..')
-            # freeze_component(model.module.backbone)
-            # freeze_component(model.module.rpn)
+                        (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1), val_photometric_loss / (v+1)))        
+        
+        if args.freeze and epoch == 0:
+            logging.info('Freezing Backbone and RPN ..')
+            freeze_component(model.module.backbone)
+            freeze_component(model.module.rpn)
 
         # Decay Learning Rate
         scheduler.step()

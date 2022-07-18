@@ -77,8 +77,6 @@ class GeneralizedRCNN(nn.Module):
         original_images = [img.permute(1, 2, 0) for img in images]
         
         images, targets = self.transform(images, targets)
-
-        # print([(img.shape, type(img), torch.max(img)) for img in original_images])
         
         # Check for degenerate boxes
         # TODO: Move this to a function
@@ -95,8 +93,6 @@ class GeneralizedRCNN(nn.Module):
                                      .format(degen_bb, target_idx))
 
         features = self.backbone(images.tensors)
-        # print(features['pool'].shape)
-        # print(self.backbone.body(images.tensors)['3'].shape)
         if isinstance(features, torch.Tensor):
             features = OrderedDict([('0', features)])
         proposals, proposal_losses = self.rpn(images, features, targets)

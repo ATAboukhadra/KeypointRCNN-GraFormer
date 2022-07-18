@@ -16,10 +16,6 @@ python3 train_rcnn.py \
   --val_epoch 1 \
   --snapshot_epoch 1 \
   --num_iterations 50 \
-  --gpu \
-  --graformer \
-  --generate_mesh \
-  # --object \
-    # --freeze \
-#  --feature_extractor \
-  
+  --num_features 2048 \
+  # --object \  
+#   --generate_mesh \

@@ -366,11 +366,7 @@ def fasterrcnn_resnet50_fpn(pretrained=False, progress=True,
         pretrained_backbone = False
     backbone = resnet_fpn_backbone('resnet50', pretrained_backbone, trainable_layers=trainable_backbone_layers)
     model = FasterRCNN(backbone, num_classes, **kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls['fasterrcnn_resnet50_fpn_coco'],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
-        overwrite_eps(model, 0.0)
+
     return model
 
 
@@ -389,11 +385,7 @@ def _fasterrcnn_mobilenet_v3_large_fpn(weights_name, pretrained=False, progress=
 
     model = FasterRCNN(backbone, num_classes, rpn_anchor_generator=AnchorGenerator(anchor_sizes, aspect_ratios),
                        **kwargs)
-    if pretrained:
-        if model_urls.get(weights_name, None) is None:
-            raise ValueError("No checkpoint is available for model {}".format(weights_name))
-        state_dict = load_state_dict_from_url(model_urls[weights_name], progress=progress)
-        model.load_state_dict(state_dict)
+
     return model
 
 

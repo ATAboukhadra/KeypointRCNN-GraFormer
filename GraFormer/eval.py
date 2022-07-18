@@ -7,7 +7,7 @@ from main_GraFormer import evaluate
 
 
 dataset_path = '../../HOPE/datasets/ho-v3-mesh'
-seq_length = 5
+seq_length = 9
 mesh = False
 n_points = 21
 obj = False
@@ -49,6 +49,6 @@ print("==> Loaded checkpoint (Epoch: {} | Error: {})".format(start_epoch, error_
 
 # Evaluation
 print('==> Evaluating...')
-errors_p1, errors_p2 = evaluate(valid_loader, model_pos, device)
+errors_p1, errors_p2 = evaluate(valid_loader, model_pos, device, seq_length)
 print('Protocol #1   (MPJPE) action-wise average: {:.2f} (mm)'.format(np.mean(errors_p1).item()))
 print('Protocol #2 (P-MPJPE) action-wise average: {:.2f} (mm)'.format(np.mean(errors_p2).item()))
