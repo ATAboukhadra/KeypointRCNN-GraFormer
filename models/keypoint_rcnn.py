@@ -3,12 +3,11 @@ from torch import nn
 
 from torchvision.ops import MultiScaleRoIAlign
 
-from torchvision.models.detection._utils import overwrite_eps
-from torchvision._internally_replaced_utils import load_state_dict_from_url
-
-from .faster_rcnn import FasterRCNN
+from .faster_rcnn import FasterRCNN, TwoMLPHead
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone, _validate_trainable_layers
 from GraFormer.network.GraFormer import GraFormer, adj_mx_from_edges
+from GraFormer.network.MeshGraFormer import MeshGraFormer
+
 from GraFormer.common.data_utils import create_edges
 
 __all__ = [
@@ -172,7 +171,7 @@ class KeypointRCNN(FasterRCNN):
                  bbox_reg_weights=None,
                  # keypoint parameters
                  keypoint_roi_pool=None, keypoint_head=None, keypoint_predictor=None,
-                 keypoint_graformer=None, num_keypoints=17, device='cpu', add_graformer=False):
+                 init_num_kps=21, num_keypoints=21, device='cpu', num_features=1024):
 
         assert isinstance(keypoint_roi_pool, (MultiScaleRoIAlign, type(None)))
         if min_size is None:
@@ -196,13 +195,19 @@ class KeypointRCNN(FasterRCNN):
 
         if keypoint_predictor is None:
             keypoint_dim_reduced = 512  # == keypoint_layers[-1]
-            keypoint_predictor = KeypointRCNNPredictor(keypoint_dim_reduced, num_keypoints)
+            keypoint_predictor = KeypointRCNNPredictor(keypoint_dim_reduced, init_num_kps)
 
-        if keypoint_graformer is None and add_graformer:
-            print("==> Creating model...")
-            edges = create_edges(num_nodes=num_keypoints)
-            adj = adj_mx_from_edges(num_pts=num_keypoints, edges=edges, sparse=False)
-            keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(3136, 3136), n_pts=num_keypoints, num_layers=5, n_head=4, dropout=0.25)
+        # GraFormer            
+        input_size = 3136
+        
+        edges = create_edges(num_nodes=init_num_kps)
+        adj = adj_mx_from_edges(num_pts=init_num_kps, edges=edges, sparse=False)            
+        keypoint_graformer = GraFormer(adj=adj.to(device), hid_dim=96, coords_dim=(input_size, 3), 
+                                        n_pts=init_num_kps, num_layers=5, n_head=4, dropout=0.25)
+        feature_extractor = TwoMLPHead(256 * 14 * 14, num_features)
+        input_size += num_features
+        # Coarse-to-fine GraFormer
+        mesh_graformer = MeshGraFormer(initial_adj=adj.to(device), hid_dim=num_features // 4, coords_dim=(input_size, 3), n_pts=num_keypoints, dropout=0.25)
 
         super(KeypointRCNN, self).__init__(
             backbone, num_classes,
@@ -228,10 +233,10 @@ class KeypointRCNN(FasterRCNN):
         self.roi_heads.keypoint_head = keypoint_head
         self.roi_heads.keypoint_predictor = keypoint_predictor
 
-        if add_graformer:
-            self.roi_heads.keypoint_graformer = keypoint_graformer
-        else:
-            self.roi_heads.keypoint_graformer = None
+        self.roi_heads.keypoint_graformer = keypoint_graformer
+        self.roi_heads.feature_extractor = feature_extractor
+        self.roi_heads.mesh_graformer = mesh_graformer
+
 
 class KeypointRCNNHeads(nn.Sequential):
     def __init__(self, in_channels, layers):
@@ -352,12 +357,4 @@ def keypointrcnn_resnet50_fpn(pretrained=False, progress=True,
         pretrained_backbone = False
     backbone = resnet_fpn_backbone('resnet50', pretrained_backbone, trainable_layers=trainable_backbone_layers)
     model = KeypointRCNN(backbone, num_classes, num_keypoints=num_keypoints, **kwargs)
-    if pretrained:
-        key = 'keypointrcnn_resnet50_fpn_coco'
-        if pretrained == 'legacy':
-            key += '_legacy'
-        state_dict = load_state_dict_from_url(model_urls[key],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
-        overwrite_eps(model, 0.0)
     return model

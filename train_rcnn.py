@@ -16,6 +16,7 @@ import os
 
 from utils.options import parse_args_function
 from utils.dataset import Dataset
+from utils.utils import freeze_component, calculate_keypoints
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -28,23 +29,12 @@ root = args.input_file
 
 # Define device
 device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() else 'cpu')
-# device = 'cpu'
 
 use_cuda = False
-if args.gpu:
+if torch.cuda.is_available():
     use_cuda = True
 
-if args.object:
-    keypoints = 29
-else:
-    keypoints = 21
-    
-if args.generate_mesh:
-    if args.object:
-        keypoints = 1778
-    else:
-        keypoints = 778
-
+init_num_kps, num_keypoints = calculate_keypoints(args.object)
 
 """ Configure a log """
 
@@ -62,30 +52,33 @@ transform = transforms.Compose([transforms.ToTensor()])
 """ load datasets """
 
 if args.train:
-    trainset = Dataset(root=root, load_set='train', transform=transform, return_mesh=args.generate_mesh, object=args.object)
+    trainset = Dataset(root=root, load_set='train', transform=transform, num_keypoints=num_keypoints)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=32, collate_fn=collate_fn)    
     logging.info('Train files loaded')
     logging.info(f'size of training set: {len(trainset)}')
 
 if args.val:
-    valset = Dataset(root=root, load_set='val', transform=transform, return_mesh=args.generate_mesh, object=args.object)
+    valset = Dataset(root=root, load_set='val', transform=transform, num_keypoints=num_keypoints)
     valloader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
     logging.info('Validation files loaded')
     logging.info(f'size of validation set: {len(valset)}')
 
 """ load model """
 
-model = keypointrcnn_resnet50_fpn(pretrained=False, num_keypoints=keypoints, num_classes=2, device=device, add_graformer=args.graformer)
+model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
+                                # rpn_batch_size_per_image=1,
+                                box_detections_per_img=1,
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                device=device, num_features=args.num_features)
 print('Keypoint RCNN is loaded')
-logging.info(model)
+print(model)
 
-if use_cuda and torch.cuda.is_available():
-    if args.graformer:
-        model.roi_heads.keypoint_graformer.mask = model.roi_heads.keypoint_graformer.mask.cuda(args.gpu_number[0])
-    
+if torch.cuda.is_available():
     model = model.cuda(args.gpu_number[0])
     model = nn.DataParallel(model, device_ids=args.gpu_number)
 
+    # freeze_component(model.module.backbone)
+    # freeze_component(model.module.rpn)
 """ load saved model"""
 
 if args.pretrained_model != '':
@@ -104,7 +97,7 @@ optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step, gamma=args.lr_step_gamma)
 scheduler.last_epoch = start
 
-keys = ['boxes', 'labels', 'keypoints']
+keys = ['boxes', 'labels', 'keypoints', 'keypoints3d', 'mesh3d']
 
 """ training """
 
@@ -112,9 +105,12 @@ if args.train:
     logging.info('Begin training the network...')
     
     for epoch in range(start, args.num_iterations):  # loop over the dataset multiple times
-    
-        running_loss = 0.0
-        train_loss = 0.0
+        
+        train_loss2d = 0.0
+        running_loss2d = 0.0
+        running_loss3d = 0.0
+        running_mesh_loss3d = 0.0
+        
         for i, tr_data in enumerate(trainloader):
             
             # get the inputs
@@ -136,15 +132,29 @@ if args.train:
             optimizer.step()
 
             # print statistics
-            loss = loss_dict['loss_keypoint']
-            running_loss += loss.data
-            train_loss += loss.data
+            train_loss2d += loss_dict['loss_keypoint'].data
+            running_loss2d += loss_dict['loss_keypoint'].data
+            running_loss3d += loss_dict['loss_keypoint3d'].data
+            running_mesh_loss3d += loss_dict['loss_mesh3d'].data
+            
             if (i+1) % args.log_batch == 0:    # print every log_iter mini-batches
-                logging.info('[%d, %5d] loss: %.5f' % (epoch + 1, i + 1, running_loss / args.log_batch))
-                running_loss = 0.0
+                logging.info('[%d, %5d] loss 2d: %.5f, loss 3d: %.5f, mesh loss 3d:%.5f' % 
+                (epoch + 1, i + 1, running_loss2d / args.log_batch, running_loss3d / args.log_batch, running_mesh_loss3d / args.log_batch))
                 
+                running_mesh_loss3d = 0.0
+                running_loss2d = 0.0
+                running_loss3d = 0.0
+        
+        losses.append((train_loss2d / (i+1)).cpu().numpy())
+        
+        if (epoch+1) % args.snapshot_epoch == 0:
+            torch.save(model.state_dict(), args.output_file+str(epoch+1)+'.pkl')
+            np.save(args.output_file+str(epoch+1)+'-losses.npy', np.array(losses))
+
         if args.val and (epoch+1) % args.val_epoch == 0:
-            val_loss = 0.0
+            val_loss2d = 0.0
+            val_loss3d = 0.0
+            val_mesh_loss3d = 0.0
             for v, val_data in enumerate(valloader):
                 # get the inputs
                 data_dict = val_data
@@ -154,17 +164,16 @@ if args.train:
                 inputs = [t[0]['inputs'].to(device) for t in data_dict]    
                 loss_dict = model(inputs, targets)
                 
-                # loss = sum(loss for loss in loss_dict.values())
-                loss = loss_dict['loss_keypoint']
-
-                val_loss += loss.data
-            logging.info('val error: %.5f' % (val_loss / (v+1)))
-                
-        losses.append((train_loss / (i+1)).cpu().numpy())
+                val_loss2d += loss_dict['loss_keypoint'].data
+                val_loss3d += loss_dict['loss_keypoint3d'].data
+                val_mesh_loss3d += loss_dict['loss_mesh3d'].data
+            
+            logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
         
-        if (epoch+1) % args.snapshot_epoch == 0:
-            torch.save(model.state_dict(), args.output_file+str(epoch+1)+'.pkl')
-            np.save(args.output_file+str(epoch+1)+'-losses.npy', np.array(losses))
+        if args.freeze and epoch == 0:
+            logging.info('Freezing Backbone and RPN ..')
+            freeze_component(model.module.backbone)
+            freeze_component(model.module.rpn)
 
         # Decay Learning Rate
         scheduler.step()

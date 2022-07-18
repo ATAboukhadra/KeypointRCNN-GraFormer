@@ -9,6 +9,9 @@ import math
 import sys
 import matplotlib.pyplot as plt
 import cv2
+import pymeshlab
+from manopth.manolayer import ManoLayer
+
 
 """ General util functions. """
 def _assert_exist(p):
@@ -110,7 +113,7 @@ def showHandJoints(imgInOrg, gtIn, filename=None, dataset_name='ho', mode='pred'
                              thickness=-1)
     else:
         if dataset_name=='ho':
-            max_length=150
+            max_length=300
         else:
             max_length=350
         for joint_num in range(gtIn.shape[0]):
@@ -364,12 +367,104 @@ def show2DMesh(fig, ax, img, mesh2DPoints, gt=False, filename=None):
         fig.savefig(f'{filename}', bbox_inches=extent)
 
 
+def draw_confidence(image, keypoints, scores):
+    keypoints = np.round(keypoints).astype(np.int)
+
+    high_confidence = np.where(scores >= 2)[0]
+    low_confidence = np.where(scores < 2)[0]
+    # print(high_confidence)
+    
+    for idx in high_confidence:
+        cv2.circle(image, center=(keypoints[idx][0], keypoints[idx][1]), radius=3, color=[43, 140, 237], thickness=-1)
+    for idx in low_confidence:
+        cv2.circle(image, center=(keypoints[idx][0], keypoints[idx][1]), radius=3, color=[0, 0, 0], thickness=-1)
+    
+    return image
+
+def plot_bb_ax(img, labels, fig_config, subplot_id, plot_txt):
+    fig, H, W = fig_config
+    bb_image = np.copy(img)
+    ax = fig.add_subplot(H, W, subplot_id)
+    for bb in labels['boxes']:
+        bb_image = draw_bb(bb_image, bb, [229, 255, 204])    
+    
+    ax.title.set_text(plot_txt)
+    ax.imshow(bb_image)
+
+def plot_pose2d(img, labels, idx, center, fig_config, subplot_id, plot_txt):
+
+    cam_mat = np.array(
+        [[617.343,0,      312.42],
+        [0,       617.343,241.42],
+        [0,       0,       1]
+    ])
+    
+    keypoints3d = labels['keypoints3d'][idx]
+    keypoints = project_3D_points(cam_mat, keypoints3d + center, is_OpenGL_coords=False)
+
+    fig, H, W = fig_config
+    gt_image = np.copy(img)
+    
+    ax = fig.add_subplot(H, W, subplot_id)
+    gt_image = showHandJoints(gt_image, keypoints[:21])
+    if keypoints.shape[0] > 21:
+        gt_image = showObjJoints(gt_image, keypoints[21:])
+    
+    ax.title.set_text(plot_txt)
+    ax.imshow(gt_image)
+    
+def plot_pose3d(labels, idx, center, num_keypoints, fig_config, subplot_id, plot_txt):
+    fig, H, W = fig_config
+    keypoints3d = labels['keypoints3d'][idx]
+    if center is not None:
+        keypoints3d += center
+
+    ax = fig.add_subplot(H, W, subplot_id, projection="3d")
+    show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
+    if num_keypoints > 778:
+        show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
+    
+    ax.title.set_text(plot_txt)
+
+def plot_mesh3d(labels, idx, center, num_keypoints, hand_faces, obj_faces, fig_config, subplot_id, plot_txt):
+    fig, H, W = fig_config
+    ax = fig.add_subplot(H, W, subplot_id, projection="3d")
+    keypoints3d = labels['mesh3d'][0]
+    if center is not None:
+        keypoints3d += center
+    
+    plot3dVisualize(ax, keypoints3d[:778], hand_faces, flip_x=False, isOpenGLCoords=False, c="r")
+    if num_keypoints > 778:
+        plot3dVisualize(ax, keypoints3d[778:], obj_faces, flip_x=False, isOpenGLCoords=False, c="b")
+    cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
+    ax.title.set_text(plot_txt)
+
+def load_faces():
+    
+    # Load hand faces
+    mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, ncomps=6, flat_hand_mean=True)
+    hand_faces = mano_layer.th_faces
+    
+    # Loading object faces
+    obj_mesh = read_obj('../HOPE/datasets/spheres/sphere_1000.obj')
+    obj_faces = obj_mesh.f
+
+    return hand_faces, obj_faces
+
+def save_mesh(labels, idx, num_keypoints, filename, hand_faces, obj_faces):
+    predicted_keypoints3d = labels['mesh3d'][idx]
+    final_obj = filename.replace('.jpg', '').replace('.png', '')
+    if num_keypoints > 778:
+        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
+        write_obj(predicted_keypoints3d, final_faces, final_obj)
+    else:
+        write_obj(predicted_keypoints3d, hand_faces, final_obj)
+
+
 class Minimal(object):
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
         
-
-
 class Open3DWin():
     def __init__(self):
         import open3d
@@ -602,4 +697,15 @@ def read_annotation(base_dir, seq_name, file_id, split):
 
     return pkl_data
 
+
+def write_obj(verts, faces, filename, texture=None):
+    if texture is not None:
+        alpha = np.ones((verts.shape[0], 1))
+        v_color_matrix = np.append(texture, alpha, axis=1)
+        m = pymeshlab.Mesh(verts, faces, v_color_matrix=v_color_matrix)
+    else:
+        m = pymeshlab.Mesh(verts, faces)
+    ms = pymeshlab.MeshSet()
+    ms.add_mesh(m, f'{filename}')
+    ms.save_current_mesh(f'{filename}.obj', save_vertex_normal=True, save_vertex_color=True, save_polygonal=True)
 

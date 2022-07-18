@@ -187,7 +187,7 @@ class GraphNet(nn.Module):
         super(GraphNet, self).__init__()
 
         requires_grad=True
-        if n_pts > 200:
+        if n_pts > 100:
             requires_grad = False
         self.A_hat = Parameter(torch.eye(n_pts).float(), requires_grad=requires_grad)
         self.gconv1 = LAM_Gconv(in_features, in_features * 2)
@@ -205,7 +205,7 @@ class GraFormer(nn.Module):
         super(GraFormer, self).__init__()
         self.n_layers = num_layers
         self.adj = adj
-        self.mask = torch.tensor([[[True] * n_pts]])
+        self.mask = torch.tensor([[[True] * n_pts]]).to(adj.device)
 
         _gconv_input = ChebConv(in_c=coords_dim[0], out_c=hid_dim, K=2)
         _gconv_layers = []
@@ -216,7 +216,6 @@ class GraFormer(nn.Module):
         attn = MultiHeadedAttention(n_head, dim_model)
         gcn = GraphNet(in_features=dim_model, out_features=dim_model, n_pts=n_pts)
 
-        
         for i in range(num_layers):
             _gconv_layers.append(_ResChebGC(adj=self.adj, input_dim=hid_dim, output_dim=hid_dim,
                                                 hid_dim=hid_dim, p_dropout=0.1))
@@ -228,6 +227,7 @@ class GraFormer(nn.Module):
         self.gconv_output = ChebConv(in_c=dim_model, out_c=coords_dim[1], K=2)
 
     def forward(self, x):
+        # print(x.shape, self.adj.shape)
         out = self.gconv_input(x, self.adj)
         for i in range(self.n_layers):
             out = self.atten_layers[i](out, self.mask)
