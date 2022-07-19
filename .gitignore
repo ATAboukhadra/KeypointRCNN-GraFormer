@@ -2,3 +2,8 @@
 *.zip
 *.pkl
 *.json
+*.obj
+*.mtl
+*.xml
+*.xyz
+*.png

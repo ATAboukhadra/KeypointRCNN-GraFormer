@@ -74,7 +74,7 @@ parser.add_argument("--seq", default='MPM13', help="Sequence Name")
 parser.add_argument("--object", action='store_true', help="generate pose or shape for object?")
 parser.add_argument("--visualize", action='store_true', help="Visualize results?")
 parser.add_argument("--ycb_path", default='./datasets/ycb_models/', help="Input YCB models, directory")
-parser.add_argument("--num_features", type=int, default = 1024, help="Number of features passed to coarse-to-fine network")
+parser.add_argument("--num_features", type=int, default=2048, help="Number of features passed to coarse-to-fine network")
 
 args = parser.parse_args()
 

@@ -62,43 +62,43 @@ def parse_args_function():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default = 0.01,
+        default=0.0001,
         help="Identifies the optimizer learning rate."
     )
     parser.add_argument(
         "--lr_step",
         type=int,
-        default = 1000,
+        default=100,
         help="Identifies the adaptive learning rate step size."
     )
     parser.add_argument(
         "--lr_step_gamma",
         type=float,
-        default = 0.1,
+        default=0.9,
         help="Identifies the adaptive learning rate step gamma."
     )
     parser.add_argument(
         "--log_batch",
         type=int,
-        default = 1000,
+        default=100,
         help="Show log samples."
     )
     parser.add_argument(
         "--val_epoch",
         type=int,
-        default = 1,
+        default=1,
         help="Run validation on epochs."
     )
     parser.add_argument(
         "--snapshot_epoch",
         type=int,
-        default = 10,
+        default=1,
         help="Save snapshot epochs."
     )
     parser.add_argument(
         "--num_iterations",
         type=int,
-        default = 10000,
+        default=50,
         help="Maximum number of epochs."
     )
 
@@ -111,7 +111,7 @@ def parse_args_function():
     parser.add_argument(
         "--num_features",
         type=int,
-        default = 1024,
+        default = 2048,
         help="Number of features passed to coarse-to-fine network"
     )
 
