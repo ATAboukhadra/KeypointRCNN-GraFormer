@@ -67,8 +67,9 @@ if args.val:
 
 model = keypointrcnn_resnet50_fpn(init_num_kps=init_num_kps, num_keypoints=num_keypoints, num_classes=2, 
                                 # rpn_batch_size_per_image=1,
-                                box_detections_per_img=1,
+                                # box_detections_per_img=1,
                                 rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                rpn_pre_nms_top_n_train=1,
                                 device=device, num_features=args.num_features)
 print('Keypoint RCNN is loaded')
 print(model)
@@ -144,7 +145,6 @@ if args.train:
                 running_mesh_loss3d = 0.0
                 running_loss2d = 0.0
                 running_loss3d = 0.0
-        
         losses.append((train_loss2d / (i+1)).cpu().numpy())
         
         if (epoch+1) % args.snapshot_epoch == 0:
@@ -171,9 +171,17 @@ if args.train:
             logging.info('val loss 2d: %.5f, val loss 3d: %.5f, val mesh loss 3d: %.5f' % (val_loss2d / (v+1), val_loss3d / (v+1), val_mesh_loss3d / (v+1)))
         
         if args.freeze and epoch == 0:
-            logging.info('Freezing Backbone and RPN ..')
+            logging.info('Freezing Backbone and RPN and RoI heads ..')            
             freeze_component(model.module.backbone)
             freeze_component(model.module.rpn)
+            # Box models
+            freeze_component(model.module.roi_heads.box_roi_pool)
+            freeze_component(model.module.roi_heads.box_head)
+            freeze_component(model.module.roi_heads.box_predictor)
+            # Keypoint models
+            freeze_component(model.module.roi_heads.keypoint_roi_pool)
+            freeze_component(model.module.roi_heads.keypoint_head)
+            freeze_component(model.module.roi_heads.keypoint_predictor)
 
         # Decay Learning Rate
         scheduler.step()

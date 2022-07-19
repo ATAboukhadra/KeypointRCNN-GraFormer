@@ -98,7 +98,11 @@ device = torch.device(f'cuda:{args.gpu_number[0]}' if torch.cuda.is_available() 
 
 # Define model
 model = keypointrcnn_resnet50_fpn(pretrained=False, init_num_kps=init_num_keypoints, num_keypoints=num_keypoints, num_classes=2, device=device,
-                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, rpn_batch_size_per_image=1, num_features=args.num_features)
+                                rpn_post_nms_top_n_train=1, rpn_post_nms_top_n_test=1, 
+                                # box_detections_per_img=1,
+                                box_score_thresh=0.0,
+                                # rpn_batch_size_per_image=1, 
+                                num_features=args.num_features)
 
 if torch.cuda.is_available():
     model = model.cuda(device=args.gpu_number[0])
@@ -132,9 +136,11 @@ for i, ts_data in tqdm(enumerate(testloader)):
     img = inputs[0].cpu().detach().numpy()
     
     predictions, img, palm, labels = prepare_data_for_evaluation(data_dict, outputs, img, keys, device, args.split)
-
+    # print(path)
+    # print(predictions['scores'][0])
     ### Visualization
-    if args.visualize:
+    if args.visualize:# and predictions['scores'][0] < 0.05:
+        # print(predictions['scores'][0])
         name = path.split('/')[-1]
         if 1 in predictions['labels'] or (1 in predictions['labels'] and 2 in predictions['labels'] and args.object):
             visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', num_keypoints=num_keypoints, palm=palm)

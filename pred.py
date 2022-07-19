@@ -91,7 +91,7 @@ def pred_template(img, aux_info, predictions, path, predictions_mesh=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Show some samples from the dataset.')
-    parser.add_argument('--base_path', type=str, default='/home2/HO3D_v2', help='Path to where the HO3D dataset is located.')
+    parser.add_argument('--base_path', type=str, default='/home2/HO3D_v3', help='Path to where the HO3D dataset is located.')
     parser.add_argument('--out', type=str, default='pred.json', help='File to save the predictions.')
     parser.add_argument('--version', type=str, choices=['v2', 'v3'], help='version number')
     args = parser.parse_args()
