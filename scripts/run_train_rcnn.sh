@@ -10,3 +10,4 @@ python3 train_rcnn.py \
   --batch_size 1 \
   --gpu_number 1 \
   --object \
+  --freeze
