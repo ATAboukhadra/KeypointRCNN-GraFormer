@@ -54,12 +54,12 @@ class MeshGraFormer(nn.Module):
             initial_pts = 21
             obj=''
         else:
-            initial_pts = 29
+            initial_pts = 50
             obj='Object'
         
         hid_dim_list = [hid_dim, hid_dim // 4, hid_dim // 16, coords_dim[1]]
 
-        points_levels = [initial_pts, round(n_pts / 16), n_pts // 4, n_pts]
+        points_levels = [initial_pts, round(n_pts / 16), n_pts // 4 - 1, n_pts]
         self.mask = [torch.tensor([[[True] * points_levels[i]]]).to(self.device) for i in range(3)]
         
         self.adj = [initial_adj.to(self.device)]

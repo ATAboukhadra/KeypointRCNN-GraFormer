@@ -19,10 +19,12 @@ from utils.dataset import Dataset
 from utils.utils import freeze_component, calculate_keypoints
 from models.keypoint_rcnn import keypointrcnn_resnet50_fpn
 
-torch.multiprocessing.set_sharing_strategy('file_system')
+from h2o_utils.h2o_datapipe_pt_1_12 import create_datapipe
+from h2o_utils.h2o_example_pt_1_12 import get_tar_lists, MyPreprocessor
+from torch.utils.data.dataloader_experimental import DataLoader2
+from h2o_utils.datapipe_helpers import collate_batch_as_dict
 
-def collate_fn(batch):
-    return tuple(zip(batch))
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 args = parse_args_function()
 root = args.input_file
@@ -49,19 +51,17 @@ logging.getLogger().addHandler(fh)
 
 transform = transforms.Compose([transforms.ToTensor()])
 
-""" load datasets """
+""" Load Tar Files """
 
-if args.train:
-    trainset = Dataset(root=root, load_set='train', transform=transform, num_keypoints=num_keypoints)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=32, collate_fn=collate_fn)    
-    logging.info('Train files loaded')
-    logging.info(f'size of training set: {len(trainset)}')
+# Train
+data_dir = '/ds-av/public_datasets/h2o/wds/shards'
+input_tar_lists = get_tar_lists(data_dir, ['rgb'], subjects=[1, 2], cameras=[4])
+input_tar_lists.extend(get_tar_lists(data_dir, ['rgb'], subjects=[3], scenes=['h1', 'h2', 'k1'], cameras=[4]))
 
-if args.val:
-    valset = Dataset(root=root, load_set='val', transform=transform, num_keypoints=num_keypoints)
-    valloader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=False, num_workers=16, collate_fn=collate_fn)
-    logging.info('Validation files loaded')
-    logging.info(f'size of validation set: {len(valset)}')
+annotation_tar_files = get_tar_lists(data_dir, ['annotations'], subjects=[1, 2], cameras=[4])[0]
+annotation_tar_files.extend(get_tar_lists(data_dir, ['annotations'], subjects=[3], scenes=['h1', 'h2', 'k1'], cameras=[4])[0])
+
+annotation_components = ['cam_pose', 'hand_pose', 'hand_pose_mano', 'obj_pose', 'obj_pose_rt', 'action_label', 'verb_label']
 
 """ load model """
 
@@ -112,6 +112,15 @@ if args.train:
         running_loss3d = 0.0
         running_mesh_loss3d = 0.0
         
+
+        """ load datasets """
+        shuffle_buffer_size = 100
+        datapipe = create_datapipe(input_tar_lists, annotation_tar_files, annotation_components, shuffle_buffer_size)
+        datapipe = datapipe.map(fn=MyPreprocessor('../mano_v1_2/models/',
+                                                  '../datasets/objects/mesh_1000/',
+                                                  '/ds-av/public_datasets/h2o/wds/'))
+        trainloader = DataLoader2(datapipe, batch_size=2, num_workers=2, collate_fn=collate_batch_as_dict, pin_memory=True, parallelism_mode='mp')
+        
         for i, tr_data in enumerate(trainloader):
             
             # get the inputs
@@ -121,8 +130,8 @@ if args.train:
             optimizer.zero_grad()
             
             # Forward
-            targets = [{k: v.to(device) for k, v in t[0].items() if k in keys} for t in data_dict]
-            inputs = [t[0]['inputs'].to(device) for t in data_dict]
+            targets = [{k: v.to(device) for k, v in t.items() if k in keys} for t in data_dict]
+            inputs = [t['inputs'].to(device) for t in data_dict]
             loss_dict = model(inputs, targets)
 
             # Calculate Loss

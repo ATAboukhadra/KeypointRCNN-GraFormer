@@ -220,11 +220,12 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     valid = []
     kps3d = []
     meshes3d = []
-
+    # print(len(keypoint3d_gt), keypoint3d_gt[0].shape)
     zipped_data = zip(proposals, gt_keypoints, keypoint3d_gt, mesh3d_gt, keypoint_matched_idxs)
     for proposals_per_image, gt_kp_in_image, gt_kp3d_in_image, gt_mesh3d_in_image, midx in zipped_data:
         kp = gt_kp_in_image[midx]
         kp3d = gt_kp3d_in_image[midx]
+        # print(kp3d.shape)
         mesh3d = gt_mesh3d_in_image[midx]
 
         heatmaps_per_image, valid_per_image = keypoints_to_heatmap(kp, proposals_per_image, discretization_size)
@@ -253,6 +254,7 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     
     # 3D pose Loss
     keypoint_targets3d = torch.cat(kps3d, dim=0)
+    # print(N, K, keypoint_targets3d.shape)
     keypoint3d_pred = keypoint3d_pred.view(N * K, 3)
     keypoint_targets3d = keypoint_targets3d.view(N * K, 3)
     keypoint3d_loss = F.mse_loss(keypoint3d_pred[valid], keypoint_targets3d[valid]) / 1000

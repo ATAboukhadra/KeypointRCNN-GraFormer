@@ -37,9 +37,10 @@ def freeze_component(model):
     
 def calculate_keypoints(obj):
 
-    num_keypoints = 1778 if obj else 778
-    init_num_kps = 21 if num_keypoints == 778 else 29
+    # num_keypoints = 1778 if obj else 778
+    # init_num_kps = 21 if num_keypoints == 778 else 29
 
+    init_num_kps, num_keypoints = 50, 2556
     return init_num_kps, num_keypoints
 
 def mpjpe(predicted, target):
