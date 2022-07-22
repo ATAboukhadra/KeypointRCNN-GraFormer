@@ -128,11 +128,11 @@ if args.train:
             loss_dict = model(inputs, targets)
             # print(loss_dict)
             # Calculate Loss
-            if epoch > 0:
-                loss = sum(loss for _, loss in loss_dict.items())
-            else:
-                # print(loss_dict.keys())
-                loss = sum(loss for k, loss in loss_dict.items() if k != 'loss_photometric')
+            # if epoch > 0:
+            loss = sum(loss for _, loss in loss_dict.items())
+            # else:
+            #     # print(loss_dict.keys())
+            #     loss = sum(loss for k, loss in loss_dict.items() if k != 'loss_photometric')
                 
             # Backpropagate
             loss.backward()

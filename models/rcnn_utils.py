@@ -327,6 +327,11 @@ def keypointrcnn_loss(keypoint_logits, proposals, gt_keypoints, keypoint_matched
     mesh3d_loss = F.mse_loss(mesh3d_pred, mesh_targets3d) / 1000 
     
     # Photometric Loss
+    # To penalize rgb values with the projection of the GT shape, replace predicted xyz with GT xyz
+    mesh_targets3d = torch.reshape(mesh_targets3d, (N, K, D))    
+    xyz_rgb_pred[:, :, :3] = mesh_targets3d
+
+    # Calculate photometric loss
     images = torch.stack(images)
     photometric_loss = calculate_photometric_loss(xyz_rgb_pred, images, palms, N, K)
     
