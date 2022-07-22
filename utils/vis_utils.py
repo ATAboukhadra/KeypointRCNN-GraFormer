@@ -398,23 +398,23 @@ def plot_pose2d(img, labels, idx, center, fig_config, subplot_id, plot_txt):
     ax.title.set_text(plot_txt)
     ax.imshow(gt_image)
     
-def plot_pose3d(labels, idx, center, num_keypoints, fig_config, subplot_id, plot_txt):
+def plot_pose3d(labels, idx, center, num_keypoints, fig_config, subplot_id, plot_txt, mode='pred'):
     fig, H, W = fig_config
     keypoints3d = labels['keypoints3d'][idx]
     if center is not None:
         keypoints3d += center
 
     ax = fig.add_subplot(H, W, subplot_id, projection="3d")
-    show3DHandJoints(ax, keypoints3d[:21], mode='gt', isOpenGLCoords=True)
+    show3DHandJoints(ax, keypoints3d[:21], mode=mode, isOpenGLCoords=True)
     if num_keypoints > 778:
-        show3DObjCorners(ax, keypoints3d[21:], mode='gt', isOpenGLCoords=True)
+        show3DObjCorners(ax, keypoints3d[21:], mode=mode, isOpenGLCoords=True)
     
     ax.title.set_text(plot_txt)
 
 def plot_mesh3d(labels, idx, center, num_keypoints, hand_faces, obj_faces, fig_config, subplot_id, plot_txt):
     fig, H, W = fig_config
     ax = fig.add_subplot(H, W, subplot_id, projection="3d")
-    keypoints3d = labels['mesh3d'][idx]
+    keypoints3d = labels['mesh3d'][idx][:, :3]
     if center is not None:
         keypoints3d += center
     
@@ -423,28 +423,6 @@ def plot_mesh3d(labels, idx, center, num_keypoints, hand_faces, obj_faces, fig_c
         plot3dVisualize(ax, keypoints3d[778:], obj_faces, flip_x=False, isOpenGLCoords=False, c="b")
     cam_equal_aspect_3d(ax, keypoints3d[:num_keypoints], flip_x=False)
     ax.title.set_text(plot_txt)
-
-def load_faces():
-    
-    # Load hand faces
-    mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, ncomps=6, flat_hand_mean=True)
-    hand_faces = mano_layer.th_faces
-    
-    # Loading object faces
-    obj_mesh = read_obj('../HOPE/datasets/spheres/sphere_1000.obj')
-    obj_faces = obj_mesh.f
-
-    return hand_faces, obj_faces
-
-def save_mesh(labels, idx, num_keypoints, filename, hand_faces, obj_faces):
-    predicted_keypoints3d = labels['mesh3d'][idx]
-    final_obj = filename.replace('.jpg', '').replace('.png', '')
-    if num_keypoints > 778:
-        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
-        write_obj(predicted_keypoints3d, final_faces, final_obj)
-    else:
-        write_obj(predicted_keypoints3d, hand_faces, final_obj)
-
 
 class Minimal(object):
     def __init__(self, **kwargs):
@@ -575,6 +553,28 @@ def read_annotation(base_dir, seq_name, file_id, split):
     pkl_data = load_pickle_data(meta_filename)
 
     return pkl_data
+
+
+def load_faces():
+    
+    # Load hand faces
+    mano_layer = ManoLayer(mano_root='../HOPE/manopth/mano/models', use_pca=False, ncomps=6, flat_hand_mean=True)
+    hand_faces = mano_layer.th_faces
+    
+    # Loading object faces
+    obj_mesh = read_obj('../HOPE/datasets/spheres/sphere_1000.obj')
+    obj_faces = obj_mesh.f
+
+    return hand_faces, obj_faces
+
+def save_mesh(labels, idx, num_keypoints, filename, hand_faces, obj_faces, texture=None, shape_dir='mesh'):
+    predicted_keypoints3d = labels['mesh3d'][idx][:, :3]
+    final_obj = filename.replace('visual_results', shape_dir).replace('.jpg', '').replace('.png', '')
+    if num_keypoints > 778:
+        final_faces = np.concatenate((hand_faces, obj_faces + 778), axis = 0)
+        write_obj(predicted_keypoints3d, final_faces, final_obj, texture)
+    else:
+        write_obj(predicted_keypoints3d, hand_faces, final_obj, texture)
 
 
 def write_obj(verts, faces, filename, texture=None):
