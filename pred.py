@@ -16,8 +16,8 @@ def main(base_path, pred_out_path, pred_func, version, set_name=None):
     # init output containers
     xyz_pred_list, verts_pred_list = list(), list()
 
-    predictions_dict = pickle.load(open(f'./rcnn_outputs/rcnn_outputs_21_test_3d_{version}.pkl', 'rb'))
-    predictions_dict_mesh = pickle.load(open(f'./rcnn_outputs_mesh/rcnn_outputs_778_test_3d_{version}.pkl', 'rb'))
+    predictions_dict = pickle.load(open(f'./outputs/rcnn_outputs/rcnn_outputs_21_test_3d_{version}.pkl', 'rb'))
+    predictions_dict_mesh = pickle.load(open(f'./outputs/rcnn_outputs/rcnn_outputs_778_test_3d_{version}.pkl', 'rb'))
 
     # read list of evaluation files
     with open(os.path.join(base_path, set_name+'.txt')) as f:

@@ -86,10 +86,10 @@ def save_dicts(output_dicts, split):
     output_dict_mesh = dict(sorted(output_dicts[1].items()))
     print('Total number of predictions:', len(output_dict.keys()))
 
-    with open(f'./rcnn_outputs/rcnn_outputs_21_{split}_3d_v2.pkl', 'wb') as f:
+    with open(f'./outputs/rcnn_outputs/rcnn_outputs_21_{split}_3d_v3.pkl', 'wb') as f:
         pickle.dump(output_dict, f)
 
-    with open(f'./rcnn_outputs_mesh/rcnn_outputs_778_{split}_3d_v2.pkl', 'wb') as f:
+    with open(f'./outputs/rcnn_outputs/rcnn_outputs_778_{split}_3d_v3.pkl', 'wb') as f:
         pickle.dump(output_dict_mesh, f)
 
 def prepare_data_for_evaluation(data_dict, outputs, img, keys, device, split):

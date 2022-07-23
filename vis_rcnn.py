@@ -143,10 +143,10 @@ for i, ts_data in tqdm(enumerate(testloader)):
         # print(predictions['scores'][0])
         name = path.split('/')[-1]
         if 1 in predictions['labels'] or (1 in predictions['labels'] and 2 in predictions['labels'] and args.object):
-            visualize2d(img, predictions, labels, filename=f'./visual_results/{args.seq}/{name}', num_keypoints=num_keypoints, palm=palm)
+            visualize2d(img, predictions, labels, filename=f'./outputs/visual_results/{args.seq}/{name}', num_keypoints=num_keypoints, palm=palm)
         else:
             print(predictions['labels'], name)
-            cv2.imwrite(f'./visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(f'./outputs/visual_results/{args.seq}/{name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
     ### Evaluation
     c = save_calculate_error(path, predictions, labels, args.split, errors, output_dicts, c, supporting_dicts=supporting_dicts)

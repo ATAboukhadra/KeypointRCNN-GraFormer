@@ -389,8 +389,8 @@ class RoIHeads(nn.Module):
                 graformer_features = graformer_features.unsqueeze(axis=1).repeat(1, kps, 1)
                 
                 # Pass features and pose to Coarse-to-fine GraFormer
-                # mesh_graformer_inputs = torch.cat((graformer_inputs, graformer_features), axis=2)
-                mesh_graformer_inputs = torch.cat((keypoint3d, graformer_features), axis=2)
+                mesh_graformer_inputs = torch.cat((graformer_inputs, graformer_features, keypoint3d), axis=2)
+                # mesh_graformer_inputs = torch.cat((keypoint3d, graformer_features), axis=2)
                 mesh3d = self.mesh_graformer(mesh_graformer_inputs)
             
             loss_keypoint = {}
