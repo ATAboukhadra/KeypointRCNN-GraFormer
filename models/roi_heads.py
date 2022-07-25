@@ -378,18 +378,21 @@ class RoIHeads(nn.Module):
             mesh3d = torch.zeros((778, 3))
 
             if batch > 0:
-                # Reshape Heatmaps
-                graformer_inputs = keypoint_logits.view(batch, kps, W*H)
-                
-                # Estimate 3D pose
-                keypoint3d = self.keypoint_graformer(graformer_inputs)
-                
+
                 # Extract features from RoIs
                 graformer_features = self.feature_extractor(graformer_features)
                 graformer_features = graformer_features.unsqueeze(axis=1).repeat(1, kps, 1)
                 
+                # Reshape Heatmaps
+                reshaped_heatmaps = keypoint_logits.view(batch, kps, W*H)
+                # graformer_inputs = reshaped_heatmaps
+                graformer_inputs = torch.cat((reshaped_heatmaps, graformer_features), axis=2)
+                
+                # Estimate 3D pose
+                keypoint3d = self.keypoint_graformer(graformer_inputs)
+                 
                 # Pass features and pose to Coarse-to-fine GraFormer
-                mesh_graformer_inputs = torch.cat((graformer_inputs, graformer_features, keypoint3d), axis=2)
+                mesh_graformer_inputs = torch.cat((reshaped_heatmaps, graformer_features, keypoint3d), axis=2)
                 # mesh_graformer_inputs = torch.cat((keypoint3d, graformer_features), axis=2)
                 mesh3d = self.mesh_graformer(mesh_graformer_inputs)
             
