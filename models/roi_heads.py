@@ -390,11 +390,11 @@ class RoIHeads(nn.Module):
                 
                 # Estimate 3D pose
                 keypoint3d = self.keypoint_graformer(graformer_inputs)
-                 
+
                 # Pass features and pose to Coarse-to-fine GraFormer
-                mesh_graformer_inputs = torch.cat((reshaped_heatmaps, graformer_features, keypoint3d), axis=2)
+                # mesh_graformer_inputs = torch.cat((reshaped_heatmaps, graformer_features, keypoint3d), axis=2)
                 # mesh_graformer_inputs = torch.cat((keypoint3d, graformer_features), axis=2)
-                mesh3d = self.mesh_graformer(mesh_graformer_inputs)
+                mesh3d = self.mesh_graformer(graformer_inputs)
             
             loss_keypoint = {}
             if self.training:
